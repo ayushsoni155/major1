@@ -1,0 +1,190 @@
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: rapidbase-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: rapidbase-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # PostgREST — Auto-generated REST API
+  # ============================================
+  postgrest:
+    image: postgrest/postgrest:latest
+    container_name: rapidbase-postgrest
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Auth Service
+  # ============================================
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: rapidbase-auth
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "4001:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Project Service
+  # ============================================
+  project-service:
+    build:
+      context: ./services/project-service
+      dockerfile: Dockerfile
+    container_name: rapidbase-project
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "4002:4002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Database Service
+  # ============================================
+  database-service:
+    build:
+      context: ./services/database-service
+      dockerfile: Dockerfile
+    container_name: rapidbase-database
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "4003:4003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Analytics Service
+  # ============================================
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    container_name: rapidbase-analytics
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "4004:4004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Nginx API Gateway
+  # ============================================
+  nginx-gateway:
+    build:
+      context: ./services/nginx-gateway
+      dockerfile: Dockerfile
+    container_name: rapidbase-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    depends_on:
+      - auth-service
+      - project-service
+      - database-service
+      - analytics-service
+      - postgrest
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Frontend (Next.js)
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rapidbase-frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - nginx-gateway
+    networks:
+      - rapidbase-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  rapidbase-network:
+    driver: bridge
