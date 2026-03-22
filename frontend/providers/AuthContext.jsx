@@ -9,21 +9,14 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Load user from token on mount
+  // On mount: try to restore session from cookie (server validates the HttpOnly cookie)
   useEffect(() => {
     const loadUser = async () => {
-      const token = localStorage.getItem("access_token");
-      if (!token) {
-        setLoading(false);
-        return;
-      }
       try {
         const res = await api.get("/auth/me");
         setUser(res.data.data);
-      } catch (err) {
-        console.error("Failed to load user:", err);
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
+      } catch {
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -31,43 +24,53 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, []);
 
-  const signInWithEmail = async (email, password) => {
-    const res = await api.post("/auth/login", { email, password });
-    const { user: userData, access_token, refresh_token } = res.data.data;
-    localStorage.setItem("access_token", access_token);
-    localStorage.setItem("refresh_token", refresh_token);
-    setUser(userData);
-    return res.data;
-  };
-
+  /**
+   * Step 1 of signup: registers user, triggers OTP email.
+   * Returns { email } so the UI can show the OTP step.
+   */
   const signUpWithEmail = async (email, password, name) => {
     const res = await api.post("/auth/register", { email, password, name });
-    const { user: userData, access_token, refresh_token } = res.data.data;
-    localStorage.setItem("access_token", access_token);
-    localStorage.setItem("refresh_token", refresh_token);
-    setUser(userData);
     return res.data;
   };
 
-  const signOut = async () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    sessionStorage.removeItem("selectedProjectId");
-    setUser(null);
+  /**
+   * Step 2 of signup: verifies OTP.
+   * On success, server sets HttpOnly cookie — user is logged in.
+   */
+  const verifyOtp = async (email, otp) => {
+    const res = await api.post("/auth/verify-otp", { email, otp });
+    setUser(res.data.data?.user || null);
+    return res.data;
   };
 
-  const refreshAccessToken = async () => {
+  /**
+   * Resend OTP to email.
+   */
+  const resendOtp = async (email) => {
+    const res = await api.post("/auth/resend-otp", { email });
+    return res.data;
+  };
+
+  /**
+   * Login with email/password — server sets HttpOnly cookie.
+   */
+  const signInWithEmail = async (email, password) => {
+    const res = await api.post("/auth/login", { email, password });
+    setUser(res.data.data?.user || null);
+    return res.data;
+  };
+
+  /**
+   * Logout — server clears the HttpOnly cookie.
+   */
+  const signOut = async () => {
     try {
-      const refresh_token = localStorage.getItem("refresh_token");
-      if (!refresh_token) throw new Error("No refresh token");
-      const res = await api.post("/auth/refresh", { refresh_token });
-      localStorage.setItem("access_token", res.data.data.access_token);
-      localStorage.setItem("refresh_token", res.data.data.refresh_token);
-      return res.data.data.access_token;
-    } catch (err) {
-      signOut();
-      throw err;
+      await api.post("/auth/logout");
+    } catch {
+      // Ignore errors — clear local state regardless
     }
+    setUser(null);
+    sessionStorage.clear();
   };
 
   return (
@@ -77,8 +80,9 @@ export const AuthProvider = ({ children }) => {
         loading,
         signInWithEmail,
         signUpWithEmail,
+        verifyOtp,
+        resendOtp,
         signOut,
-        refreshAccessToken,
       }}
     >
       {children}

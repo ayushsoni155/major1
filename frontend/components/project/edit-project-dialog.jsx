@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import axios from "@/utils/axios";
 import { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 export function EditProjectDialog({ project, open, onOpenChange, onSuccess }) {
   const [name, setName] = useState(project.project_name);
@@ -61,33 +62,53 @@ export function EditProjectDialog({ project, open, onOpenChange, onSuccess }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] glass border-white/10 text-white shadow-2xl rounded-2xl p-6">
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
-            <DialogDescription>Make changes to your project here. Click save when you&apos;re done.</DialogDescription>
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">Edit Project</DialogTitle>
+            <DialogDescription className="text-zinc-400">Make changes to your project here. Click save when you&apos;re done.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" />
+          <div className="grid gap-5 py-2 mb-6">
+            <div className="grid gap-2">
+              <Label htmlFor="name" className="text-sm font-medium text-zinc-300">Name</Label>
+              <Input 
+                id="name" 
+                value={name} 
+                onChange={(e) => setName(e.target.value)} 
+                className="h-11 bg-white/[0.05] border-white/10 text-white focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all rounded-xl w-full" 
+              />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">Status</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="status" className="text-sm font-medium text-zinc-300">Status</Label>
               <Select value={status} onValueChange={(value) => setStatus(value)}>
-                <SelectTrigger className="col-span-3">
+                <SelectTrigger className="h-11 bg-white/[0.05] border border-white/10 text-white rounded-xl focus:ring-violet-500/30 w-full focus:ring-offset-0 focus:ring-offset-transparent">
                     <SelectValue placeholder="Select a status" />
                 </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
+                <SelectContent className="glass border-white/10 text-white rounded-xl">
+                    <SelectItem value="active" className="focus:bg-white/10 focus:text-white cursor-pointer rounded-lg">Active</SelectItem>
+                    <SelectItem value="archived" className="focus:bg-white/10 focus:text-white cursor-pointer rounded-lg">Archived</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Changes'}</Button>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              onClick={() => onOpenChange(false)}
+              className="rounded-xl hover:bg-white/10 text-zinc-300 hover:text-white"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white border-0 shadow-lg shadow-violet-500/25 transition-all duration-200"
+            >
+              {isSubmitting ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+              ) : 'Save Changes'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

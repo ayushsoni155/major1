@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -11,55 +11,63 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Database, Key, Link, Hash } from "lucide-react";
+import { Database, Key, Link as LinkIcon, Hash, Layers } from "lucide-react";
 import { useProjects } from "@/providers/ProjectContext";
 import axios from "@/utils/axios";
 import useSWR from "swr";
+import { motion } from "motion/react";
 
 const fetcher = (url) => axios.get(url).then((res) => res.data.data);
 
 const DatabaseSchemaNode = ({ data }) => {
   const schema = data?.schema || [];
   return (
-    <div
-      className="rounded-xl border shadow-sm bg-card text-foreground w-[230px] overflow-hidden"
-      style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
-    >
-      <div className="flex items-center gap-2 bg-primary/10 px-3 py-2 border-b border-border">
-        <Database size={16} className="text-primary" />
-        <span className="font-semibold text-sm">{data?.label || "No Name"}</span>
+    <div className="glass-card rounded-2xl border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] bg-[#0A0A10]/80 backdrop-blur-xl w-[280px] overflow-hidden relative group">
+      <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      
+      <div className="flex items-center gap-3 bg-white/[0.03] border-b border-white/10 px-4 py-3 relative z-10">
+        <div className="p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20">
+          <Database size={16} className="text-violet-400" />
+        </div>
+        <span className="font-bold text-sm text-white tracking-wide">{data?.label || "No Name"}</span>
       </div>
-      <div className="p-2">
+      
+      <div className="p-3 relative z-10 grid gap-1">
         {schema.map((col, i) => (
           <div
             key={i}
-            className="relative flex items-center justify-between text-xs py-1 px-2 rounded hover:bg-primary/10"
+            className="group/col relative flex items-center justify-between text-xs py-2 px-3 rounded-xl hover:bg-white/[0.05] transition-colors border border-transparent hover:border-white/[0.05]"
           >
             <Handle
               type="target"
               id={col.title}
               position={Position.Left}
-              style={{ background: "var(--primary)" }}
+              className="w-2 h-2 !bg-indigo-400 !border-2 !border-[#0A0A10] group-hover/col:!w-3 group-hover/col:!h-3 transition-all -ml-1"
             />
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               {col.key === "PK" ? (
-                <Key size={12} className="text-yellow-500" />
+                <Key size={14} className="text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
               ) : col.key === "FK" ? (
-                <Link size={12} className="text-blue-500" />
+                <LinkIcon size={14} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
               ) : (
-                <Hash size={12} className="text-secondary" />
+                <Hash size={14} className="text-zinc-500" />
               )}
-              <span>{col.title}</span>
+              <span className="font-medium text-zinc-300 group-hover/col:text-white transition-colors">{col.title}</span>
             </div>
-            <span className="text-muted-foreground text-[11px]">{col.type}</span>
+            <span className="text-zinc-500 font-mono text-[10px] tracking-wider uppercase px-1.5 py-0.5 rounded-md bg-white/5 border border-white/5">{col.type}</span>
             <Handle
               type="source"
               id={col.title}
               position={Position.Right}
-              style={{ background: "var(--primary)" }}
+              className="w-2 h-2 !bg-violet-400 !border-2 !border-[#0A0A10] group-hover/col:!w-3 group-hover/col:!h-3 transition-all -mr-1"
             />
           </div>
         ))}
+        {schema.length === 0 && (
+          <div className="text-center py-4 text-xs text-zinc-500">
+            No columns defined
+          </div>
+        )}
       </div>
     </div>
   );
@@ -77,8 +85,7 @@ export default function SchemaVisualizer() {
     { revalidateOnFocus: false, shouldRetryOnError: false }
   );
 
-  // Build nodes & edges when data arrives
-  React.useEffect(() => {
+  useEffect(() => {
     if (!data) return;
     const apiNodes = (data.nodes || []).map((node) => ({
       id: node.id,
@@ -98,16 +105,16 @@ export default function SchemaVisualizer() {
       targetHandle: edge.targetHandle,
       animated: edge.animated ?? true,
       type: edge.type || "smoothstep",
-      style: edge.style || { stroke: "var(--primary)", strokeWidth: 2 },
+      style: edge.style || { stroke: "#8b5cf6", strokeWidth: 2, filter: "drop-shadow(0 0 5px rgba(139,92,246,0.5))" },
       markerEnd: edge.markerEnd || {
         type: MarkerType.ArrowClosed,
-        color: "var(--primary)",
+        color: "#8b5cf6",
       },
     }));
 
     setNodes(apiNodes);
     setEdges(apiEdges);
-  }, [data]);
+  }, [data, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (params) =>
@@ -117,52 +124,77 @@ export default function SchemaVisualizer() {
             ...params,
             animated: true,
             type: "smoothstep",
-            markerEnd: { type: MarkerType.ArrowClosed, color: "var(--primary)" },
-            style: { stroke: "var(--primary)", strokeWidth: 2 },
+            markerEnd: { type: MarkerType.ArrowClosed, color: "#8b5cf6" },
+            style: { stroke: "#8b5cf6", strokeWidth: 2, filter: "drop-shadow(0 0 5px rgba(139,92,246,0.5))" },
           },
           eds
         )
       ),
-    []
+    [setEdges]
   );
 
   if (isLoading)
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-primary text-2xl font-semibold animate-pulse">
-          Loading Schema...
+      <div className="flex flex-1 items-center justify-center p-6 h-[calc(100vh-4rem)]">
+        <div className="glass-card flex flex-col items-center justify-center w-full h-full rounded-[2rem] border-white/10 animate-pulse bg-white/[0.02]">
+          <Layers className="w-12 h-12 text-violet-500/50 mb-4 animate-bounce" />
+          <div className="text-zinc-500 text-lg font-medium">Loading Schema Visualization...</div>
         </div>
       </div>
     );
 
   if (error)
     return (
-      <div className="flex items-center justify-center h-full text-red-500">
-        Failed to load schema.
+      <div className="flex flex-1 items-center justify-center p-6 h-[calc(100vh-4rem)]">
+        <div className="glass-card flex flex-col items-center justify-center w-full max-w-lg p-8 rounded-[2rem] border-red-500/20 bg-red-500/5">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+            <Layers className="w-6 h-6 text-red-400" />
+          </div>
+          <div className="text-white text-lg font-bold mb-2">Failed to load schema</div>
+          <div className="text-zinc-400 text-center text-sm">There was a problem loading the database schema for this project.</div>
+        </div>
       </div>
     );
 
   return (
-
-     <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-    {/* <div className="bg-background text-foreground h-full relative overflow-hidden"> */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 text-2xl sm:text-3xl font-bold text-primary select-none z-10">
-        {data?.schemaName || "Database Schema"}
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="flex flex-1 flex-col p-6 h-[calc(100vh-4rem)]"
+    >
+      {/* Header */}
+      <div className="glass-card px-6 py-4 rounded-2xl border-white/10 flex items-center justify-between mb-6 shadow-xl relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 pointer-events-none" />
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-violet-600/20 border border-violet-500/30">
+            <Layers className="w-5 h-5 text-violet-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-wide">
+              {data?.schemaName || "Database Schema"}
+            </h1>
+            <p className="text-xs text-zinc-400 mt-0.5">Visual representation of your tables and relationships</p>
+          </div>
+        </div>
       </div>
 
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={{ databaseSchema: DatabaseSchemaNode }}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
-      >
-        <Background color="var(--muted-foreground)" gap={16} size={1} />
-      </ReactFlow>
-    {/* </div> */}
-    </div>
+      {/* Visualizer Area */}
+      <div className="glass-card flex-1 rounded-[2rem] border-white/10 relative overflow-hidden shadow-2xl">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={{ databaseSchema: DatabaseSchemaNode }}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          fitView
+          fitViewOptions={{ padding: 0.3 }}
+          className="bg-[#08080f]"
+        >
+          <Background color="#3f3f46" gap={20} size={1.5} />
+        </ReactFlow>
+      </div>
+    </motion.div>
   );
 }

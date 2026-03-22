@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 
 const projectRoutes = require('./src/routes/projectRoutes');
 const tableRoutes = require('./src/routes/tableRoutes');
@@ -10,9 +11,10 @@ const memberRoutes = require('./src/routes/memberRoutes');
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 app.use('/projects', projectRoutes);
 app.use('/projects', tableRoutes);

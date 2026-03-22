@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import useSWR from "swr";
 import axios from "@/utils/axios";
 
@@ -13,14 +14,26 @@ export const ProjectProvider = ({ children }) => {
   const { data: projects, error, isLoading, mutate } = useSWR("/projects/", fetcher);
 
   const [selectedProject, setSelectedProject] = useState(null);
+  const pathname = usePathname();
 
-  // Effect to load selected project from session storage on initial render
+  // Extract projectId from /project/[id]/... URLs
+  const getProjectIdFromUrl = (url) => {
+    const match = url.match(/\/project\/([^\/]+)/);
+    return match ? match[1] : null;
+  };
+
+  // Effect to auto-load project from URL or session storage
   useEffect(() => {
+    const urlProjectId = getProjectIdFromUrl(pathname);
     const storedProjectId = sessionStorage.getItem("selectedProjectId");
-    if (storedProjectId) {
+    
+    // Prefer URL ID first, then fallback to session storage
+    if (urlProjectId && (!selectedProject || selectedProject.project_id !== urlProjectId)) {
+        selectProject(urlProjectId);
+    } else if (storedProjectId && !selectedProject && !urlProjectId) {
       selectProject(storedProjectId);
     }
-  }, []);
+  }, [pathname]);
 
   const selectProject = async (projectId) => {
     try {

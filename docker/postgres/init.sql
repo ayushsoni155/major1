@@ -7,44 +7,50 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================
--- Users Table (replaces Supabase auth.users)
+-- Users Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(255),
-    avatar_url TEXT,
-    role VARCHAR(50) DEFAULT 'user',
-    is_active BOOLEAN DEFAULT true,
-    last_login TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email           VARCHAR(255) UNIQUE NOT NULL,
+    password_hash   VARCHAR(255) NOT NULL,
+    name            VARCHAR(255),
+    avatar_url      TEXT,
+    role            VARCHAR(50) DEFAULT 'user',
+    -- Email verification via OTP
+    is_verified     BOOLEAN DEFAULT false,
+    otp_code        VARCHAR(6),
+    otp_expires_at  TIMESTAMPTZ,
+    otp_attempts    INTEGER DEFAULT 0,
+    -- Account state
+    is_active       BOOLEAN DEFAULT true,
+    last_login      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================
 -- Projects Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS projects (
-    project_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    project_name VARCHAR(255) NOT NULL,
+    project_id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_name        VARCHAR(255) NOT NULL,
     project_description TEXT,
-    schema_name VARCHAR(255) UNIQUE NOT NULL,
-    project_status VARCHAR(50) DEFAULT 'active',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    schema_name         VARCHAR(255) UNIQUE NOT NULL,
+    project_status      VARCHAR(50) DEFAULT 'active',
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================
 -- Project Members Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS project_members (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(50) NOT NULL DEFAULT 'viewer',
-    invited_at TIMESTAMPTZ DEFAULT NOW(),
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id  UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role        VARCHAR(50) NOT NULL DEFAULT 'viewer',
+    invited_at  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(project_id, user_id),
     CHECK (role IN ('admin', 'editor', 'viewer'))
 );
@@ -53,33 +59,33 @@ CREATE TABLE IF NOT EXISTS project_members (
 -- API Keys Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS api_keys (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-    key_name VARCHAR(255) NOT NULL,
-    api_key VARCHAR(512) UNIQUE NOT NULL,
-    key_prefix VARCHAR(12) NOT NULL,
-    origin_url TEXT,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id  UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    key_name    VARCHAR(255) NOT NULL,
+    api_key     VARCHAR(512) UNIQUE NOT NULL,
+    key_prefix  VARCHAR(12) NOT NULL,
+    origin_url  TEXT,
     permissions JSONB DEFAULT '["read"]'::jsonb,
-    is_active BOOLEAN DEFAULT true,
+    is_active   BOOLEAN DEFAULT true,
     last_used_at TIMESTAMPTZ,
-    created_by UUID REFERENCES users(id),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    expires_at TIMESTAMPTZ
+    created_by  UUID REFERENCES users(id),
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ
 );
 
 -- ============================================
 -- Query History Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS query_history (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    query_text TEXT NOT NULL,
-    query_status VARCHAR(20) DEFAULT 'success',
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id        UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    query_text        TEXT NOT NULL,
+    query_status      VARCHAR(20) DEFAULT 'success',
     execution_time_ms INTEGER,
-    rows_affected INTEGER DEFAULT 0,
-    error_message TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
+    rows_affected     INTEGER DEFAULT 0,
+    error_message     TEXT,
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
     CHECK (query_status IN ('success', 'failed'))
 );
 
@@ -87,29 +93,75 @@ CREATE TABLE IF NOT EXISTS query_history (
 -- Audit Log Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS audit_log (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    project_id UUID REFERENCES projects(project_id) ON DELETE SET NULL,
-    actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id  UUID REFERENCES projects(project_id) ON DELETE SET NULL,
+    actor_id    UUID REFERENCES users(id) ON DELETE SET NULL,
     action_type VARCHAR(100) NOT NULL,
-    details JSONB DEFAULT '{}',
-    ip_address VARCHAR(45),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    details     JSONB DEFAULT '{}',
+    ip_address  VARCHAR(45),
+    created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================
 -- Indexes for Performance
 -- ============================================
-CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
-CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);
-CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
-CREATE INDEX IF NOT EXISTS idx_api_keys_project ON api_keys(project_id);
-CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(api_key);
+CREATE INDEX IF NOT EXISTS idx_users_email           ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_otp             ON users(email, otp_expires_at);
+CREATE INDEX IF NOT EXISTS idx_projects_owner        ON projects(owner_id);
+CREATE INDEX IF NOT EXISTS idx_project_members_proj  ON project_members(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_members_user  ON project_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_project      ON api_keys(project_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_key          ON api_keys(api_key);
 CREATE INDEX IF NOT EXISTS idx_query_history_project ON query_history(project_id);
-CREATE INDEX IF NOT EXISTS idx_query_history_user ON query_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_query_history_user    ON query_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_query_history_created ON query_history(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_log_project ON audit_log(project_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_project     ON audit_log(project_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor       ON audit_log(actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created     ON audit_log(created_at DESC);
+
+-- ============================================
+-- Row-Level Security: Multi-Tenancy
+-- ============================================
+-- Enable RLS on projects (users can only see their own projects)
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+CREATE POLICY projects_owner_isolation ON projects
+    USING (owner_id = current_setting('app.current_user_id', true)::uuid);
+
+-- Enable RLS on project_members
+ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY project_members_isolation ON project_members
+    USING (
+        project_id IN (
+            SELECT project_id FROM projects
+            WHERE owner_id = current_setting('app.current_user_id', true)::uuid
+        )
+        OR user_id = current_setting('app.current_user_id', true)::uuid
+    );
+
+-- Enable RLS on api_keys
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+CREATE POLICY api_keys_isolation ON api_keys
+    USING (
+        project_id IN (
+            SELECT project_id FROM projects
+            WHERE owner_id = current_setting('app.current_user_id', true)::uuid
+        )
+    );
+
+-- Enable RLS on query_history
+ALTER TABLE query_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY query_history_isolation ON query_history
+    USING (user_id = current_setting('app.current_user_id', true)::uuid);
+
+-- Enable RLS on audit_log
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY audit_log_isolation ON audit_log
+    USING (
+        project_id IN (
+            SELECT project_id FROM projects
+            WHERE owner_id = current_setting('app.current_user_id', true)::uuid
+        )
+    );
 
 -- ============================================
 -- PostgREST Role Setup
@@ -129,18 +181,21 @@ GRANT web_anon TO authenticator;
 GRANT USAGE ON SCHEMA public TO web_anon;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO web_anon;
 
--- Updated_at trigger function
+-- ============================================
+-- Triggers: auto-update updated_at
+-- ============================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE 'plpgsql';
 
--- Apply updated_at triggers
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects
+CREATE TRIGGER update_projects_updated_at
+    BEFORE UPDATE ON projects
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

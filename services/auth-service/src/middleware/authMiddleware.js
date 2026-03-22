@@ -1,32 +1,29 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-
 /**
- * Middleware: Protect routes using JWT
- * Verifies token → Decodes user → Attaches to req.user
+ * Middleware: Protect routes using HttpOnly cookie JWT.
+ * Reads 'access_token' from signed cookies → decodes → attaches to req.user
  */
 const protect = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    // Read from HttpOnly cookie (set by auth service on login/verify)
+    const token = req.cookies?.access_token;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       return res.status(401).json({
         status: 401,
         data: null,
-        message: 'Missing or invalid authorization token',
+        message: 'Not authenticated. Please log in.',
       });
     }
 
-    const token = authHeader.split(' ')[1];
-
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     req.user = {
-      id: decoded.id,
+      id:    decoded.id,
       email: decoded.email,
-      name: decoded.name,
-      role: decoded.role || 'user',
+      name:  decoded.name,
+      role:  decoded.role || 'user',
     };
 
     next();
@@ -35,13 +32,13 @@ const protect = async (req, res, next) => {
       return res.status(401).json({
         status: 401,
         data: null,
-        message: 'Token has expired',
+        message: 'Session expired. Please log in again.',
       });
     }
     return res.status(401).json({
       status: 401,
       data: null,
-      message: 'Invalid token',
+      message: 'Invalid session. Please log in.',
     });
   }
 };

@@ -6,18 +6,21 @@ services:
     image: postgres:16-alpine
     container_name: rapidbase-postgres
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
     networks:
       - rapidbase-network
 
@@ -28,12 +31,13 @@ services:
     image: redis:7-alpine
     container_name: rapidbase-redis
     restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,13 +48,17 @@ services:
   # PostgREST — Auto-generated REST API
   # ============================================
   postgrest:
-    image: postgrest/postgrest:latest
+    image: postgrest/postgrest:v12.2.8
     container_name: rapidbase-postgrest
     restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "3001:3001"
+    environment:
+      PGRST_DB_URI: ${PGRST_DB_URI}
+      PGRST_DB_ANON_ROLE: ${PGRST_DB_ANON_ROLE}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
+      PGRST_SERVER_PORT: "3001"
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://localhost/api/rest
+    expose:
+      - "3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,15 +74,35 @@ services:
       dockerfile: Dockerfile
     container_name: rapidbase-auth
     restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "4001:4001"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN}
+      COOKIE_SECRET: ${COOKIE_SECRET}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      FRONTEND_URL: ${FRONTEND_URL}
+      PORT: 4001
+    expose:
+      - "4001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:4001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - rapidbase-network
 
@@ -87,15 +115,25 @@ services:
       dockerfile: Dockerfile
     container_name: rapidbase-project
     restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "4002:4002"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4002
+    expose:
+      - "4002"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:4002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - rapidbase-network
 
@@ -108,15 +146,25 @@ services:
       dockerfile: Dockerfile
     container_name: rapidbase-database
     restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "4003:4003"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4003
+    expose:
+      - "4003"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:4003/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - rapidbase-network
 
@@ -129,37 +177,25 @@ services:
       dockerfile: Dockerfile
     container_name: rapidbase-analytics
     restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "4004:4004"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4004
+    expose:
+      - "4004"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - rapidbase-network
-
-  # ============================================
-  # Nginx API Gateway
-  # ============================================
-  nginx-gateway:
-    build:
-      context: ./services/nginx-gateway
-      dockerfile: Dockerfile
-    container_name: rapidbase-gateway
-    restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "5000:5000"
-    depends_on:
-      - auth-service
-      - project-service
-      - database-service
-      - analytics-service
-      - postgrest
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:4004/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - rapidbase-network
 
@@ -170,20 +206,48 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
     container_name: rapidbase-frontend
     restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
     depends_on:
-      - nginx-gateway
+      auth-service:
+        condition: service_healthy
+      project-service:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # Nginx API Gateway — Port 80
+  # ============================================
+  nginx-gateway:
+    build:
+      context: ./services/nginx-gateway
+      dockerfile: Dockerfile
+    container_name: rapidbase-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - auth-service
+      - project-service
+      - database-service
+      - analytics-service
+      - postgrest
     networks:
       - rapidbase-network
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
 
 networks:
   rapidbase-network:
