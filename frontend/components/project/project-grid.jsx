@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectCard, NewProjectCard } from '@/components/project/project-card';
@@ -21,8 +22,15 @@ const cardVariants = {
 };
 
 export function ProjectGrid({ projects, mutate }) {
-  const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(searchParams?.get("q") || "");
   const [tab, setTab] = useState("active");
+
+  // Sync search with URL param (from header search)
+  useEffect(() => {
+    const q = searchParams?.get("q") || "";
+    setSearch(q);
+  }, [searchParams]);
 
   const filteredProjects = useMemo(() => {
     return projects.filter(p =>

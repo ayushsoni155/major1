@@ -54,11 +54,11 @@ export default function MembersPage() {
     if (!inviteEmail.trim()) { toast.error("Email required"); return; }
     setSubmitting(true);
     try {
-      await api.post(`/projects/${projectID}/members`, { email: inviteEmail.trim().toLowerCase(), role: inviteRole });
-      toast.success(`Invited ${inviteEmail} as ${inviteRole}`);
+      await api.post(`/projects/${projectID}/invitations`, { email: inviteEmail.trim().toLowerCase(), role: inviteRole });
+      toast.success(`Invitation sent to ${inviteEmail}! They will receive an email with a link to accept.`);
       setInviteEmail(""); setInviteRole("editor"); setInviteOpen(false);
       mutate();
-    } catch (e) { toast.error(e.response?.data?.message || "Failed to invite member"); }
+    } catch (e) { toast.error(e.response?.data?.message || "Failed to send invitation"); }
     finally { setSubmitting(false); }
   };
 

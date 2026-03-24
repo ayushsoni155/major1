@@ -208,3 +208,41 @@ CREATE TRIGGER update_users_updated_at
 CREATE TRIGGER update_projects_updated_at
     BEFORE UPDATE ON projects
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Notifications Table
+-- ============================================
+CREATE TABLE IF NOT EXISTS notifications (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type       VARCHAR(50) NOT NULL,
+    title      VARCHAR(255) NOT NULL,
+    message    TEXT,
+    data       JSONB DEFAULT '{}',
+    is_read    BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread  ON notifications(user_id, is_read) WHERE is_read = false;
+
+-- ============================================
+-- Project Invitations Table
+-- ============================================
+CREATE TABLE IF NOT EXISTS project_invitations (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id     UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    inviter_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    invitee_email  VARCHAR(255) NOT NULL,
+    invitee_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+    role           VARCHAR(20) NOT NULL DEFAULT 'viewer',
+    token          VARCHAR(64) UNIQUE NOT NULL,
+    status         VARCHAR(20) DEFAULT 'pending',
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    expires_at     TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days')
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitations_token   ON project_invitations(token);
+CREATE INDEX IF NOT EXISTS idx_invitations_invitee ON project_invitations(invitee_id, status);
+CREATE INDEX IF NOT EXISTS idx_invitations_project ON project_invitations(project_id);
+

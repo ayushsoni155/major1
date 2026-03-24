@@ -11,7 +11,11 @@ const fetcher = (url) => axios.get(url).then((res) => res.data.data);
 
 export const ProjectProvider = ({ children }) => {
   // SWR for fetching all projects
-  const { data: projects, error, isLoading, mutate } = useSWR("/projects/", fetcher);
+  const { data: projects, error, isLoading, mutate } = useSWR("/projects/", fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 300_000, // 5 minutes — only re-fetch on explicit mutate() calls
+  });
 
   const [selectedProject, setSelectedProject] = useState(null);
   const pathname = usePathname();

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Play, AlertTriangle, TerminalSquare, Key, Link2, Database, Code2, History, Download, Clock, ChevronRight } from "lucide-react";
-import axios, { makeProjectFetcher } from "@/utils/axios";
+import axios from "@/utils/axios";
 import { useProjects } from "@/providers/ProjectContext";
 import CodeMirror from "@uiw/react-codemirror";
 import { sql } from "@codemirror/lang-sql";

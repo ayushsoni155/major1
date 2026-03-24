@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { MoreVertical, Trash2, Pencil, Plus, Database, ArrowRight, Archive, ArchiveRestore } from "lucide-react";
+import { MoreVertical, Trash2, Pencil, Plus, Database, ArrowRight, Archive, ArchiveRestore, ArchiveIcon } from "lucide-react";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { DeleteProjectAlert } from "./delete-project-alert";
 import { CreateProjectDialog } from "./create-project-dialog";
@@ -34,7 +34,7 @@ export function ProjectCard({ project, mutate }) {
     try {
       const { default: api } = await import("@/utils/axios");
       const { toast } = await import("sonner");
-      await api.put(`/projects/${project.project_id}`, {
+      await api.patch(`/projects/${project.project_id}`, {
         status: isArchived ? "active" : "archived"
       });
       toast.success(isArchived ? "Project restored to active" : "Project archived");
@@ -91,7 +91,7 @@ export function ProjectCard({ project, mutate }) {
                   Edit details
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onSelect={handleArchiveToggle}
+                  onClick={(e) => { e.preventDefault(); handleArchiveToggle(); }}
                   className="mx-1 rounded-lg gap-2 px-2.5 py-2 text-zinc-300 hover:text-white focus:text-white hover:bg-white/[0.07] focus:bg-white/[0.07] cursor-pointer text-sm"
                 >
                   {isArchived
@@ -115,7 +115,11 @@ export function ProjectCard({ project, mutate }) {
         {/* Bottom row */}
         <div className="flex items-center justify-between mt-auto relative z-10">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.7)]" />
+            {isArchived ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.7)]" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.7)]" />
+            )}
             <span className="text-[11px] font-medium text-zinc-400 capitalize">
               {project.project_status}
             </span>
@@ -123,9 +127,10 @@ export function ProjectCard({ project, mutate }) {
           <Button
             onClick={handleSelectClick}
             size="sm"
-            className="h-8 px-3 text-xs bg-white/[0.07] hover:bg-violet-600 text-white border border-white/[0.08] hover:border-violet-500 rounded-xl shadow-sm transition-all duration-200 group-hover:shadow-[0_0_16px_rgba(139,92,246,0.35)] gap-1.5"
+            disabled={isArchived}
+            className="h-8 px-3 text-xs bg-white/[0.07] hover:bg-violet-600 text-white border border-white/[0.08] hover:border-violet-500 rounded-xl shadow-sm transition-all duration-200 group-hover:shadow-[0_0_16px_rgba(139,92,246,0.35)] gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Open <ArrowRight className="w-3 h-3 opacity-80" />
+            {isArchived ? "Archived" : <><span>Open</span> <ArrowRight className="w-3 h-3 opacity-80" /></>}
           </Button>
         </div>
       </div>

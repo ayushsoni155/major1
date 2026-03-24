@@ -112,7 +112,27 @@ const getTableDetails = async (req, res, next) => {
       return res.status(403).json({ status: 403, data: null, message: 'Permission denied.' });
     }
     const { rows } = await db.query(
-      `SELECT column_name, data_type, is_nullable, column_default, udt_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
+      `SELECT
+         c.column_name,
+         c.data_type,
+         c.is_nullable,
+         c.column_default,
+         c.udt_name,
+         CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary_key
+       FROM information_schema.columns c
+       LEFT JOIN (
+         SELECT kcu.column_name
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name = kcu.constraint_name
+           AND tc.table_schema = kcu.table_schema
+           AND tc.table_name = kcu.table_name
+         WHERE tc.constraint_type = 'PRIMARY KEY'
+           AND tc.table_schema = $1
+           AND tc.table_name = $2
+       ) pk ON c.column_name = pk.column_name
+       WHERE c.table_schema = $1 AND c.table_name = $2
+       ORDER BY c.ordinal_position`,
       [schema_name, tableName]
     );
     if (!rows.length) return res.status(404).json({ status: 404, data: null, message: 'Table not found.' });
@@ -185,8 +205,31 @@ const insertRow = async (req, res, next) => {
     if (!project) return res.status(404).json({ status: 404, data: null, message: 'Project not found.' });
     const { schema_name, owner_id, role } = project;
     if (userId !== owner_id && !['admin', 'editor'].includes(role)) return res.status(403).json({ status: 403, data: null, message: 'Permission denied.' });
-    const cols = Object.keys(row);
-    const vals = Object.values(row);
+    // Filter out columns where value is null/empty and column has a DB default
+    // (handles UUID PKs, serials, and any DEFAULT gen_random_uuid() columns)
+    const filteredRow = {};
+    for (const [key, val] of Object.entries(row)) {
+      if (val === null || val === '' || val === undefined) {
+        // Check if this column has a default — if so, omit it and let DB handle it
+        const { rows: colMeta } = await db.query(
+          `SELECT column_default FROM information_schema.columns
+           WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`,
+          [schema_name, tableName, key]
+        );
+        if (colMeta[0]?.column_default) continue; // skip — DB will use its default
+      }
+      filteredRow[key] = val;
+    }
+    const cols = Object.keys(filteredRow);
+    const vals = Object.values(filteredRow);
+    if (cols.length === 0) {
+      // All columns have defaults — insert empty row
+      const { rows } = await db.query(
+        `INSERT INTO "${schema_name}"."${tableName}" DEFAULT VALUES RETURNING *`
+      );
+      await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.ROW_CREATED, details: { tableName, row: rows[0] }, ipAddress: req.ip });
+      return res.status(201).json({ status: 201, data: rows[0], message: 'Row inserted.' });
+    }
     const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
     const { rows } = await db.query(
       `INSERT INTO "${schema_name}"."${tableName}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders}) RETURNING *`,

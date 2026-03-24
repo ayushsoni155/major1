@@ -8,12 +8,24 @@ const api = axios.create({
   },
 });
 
-// Response interceptor: on 401, redirect to login
+// Response interceptor: on 401, redirect to login unless it's an auth-action endpoint
+// (e.g. wrong-password on /auth/change-password should NOT redirect — just show toast)
+const AUTH_ACTION_ENDPOINTS = [
+  "/auth/change-password",
+  "/auth/login",
+  "/auth/register",
+  "/auth/verify-otp",
+  "/auth/resend-otp",
+];
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const url = error.config?.url || "";
+    const isAuthAction = AUTH_ACTION_ENDPOINTS.some(ep => url.includes(ep));
     if (
       error.response?.status === 401 &&
+      !isAuthAction &&
       typeof window !== "undefined" &&
       !window.location.pathname.startsWith("/login") &&
       !window.location.pathname.startsWith("/signup")

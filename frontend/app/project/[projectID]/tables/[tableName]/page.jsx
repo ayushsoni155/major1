@@ -100,6 +100,20 @@ export default function TableDataGridPage() {
       || "id";
   };
 
+  // Returns true if a column should be excluded from the insert form
+  // (auto-generated: UUID default, serial, or the primary key)
+  const isAutoColumn = (col) => {
+    if (!col) return false;
+    const isUUID = col.data_type?.toLowerCase() === "uuid";
+    const hasDefault = col.column_default &&
+      (col.column_default.includes("gen_random_uuid") ||
+       col.column_default.includes("uuid_generate") ||
+       col.column_default.includes("nextval"));
+    const isPK = col.is_primary_key ||
+      col.column_name === getPKColumn(tableDetails);
+    return isPK || (isUUID && hasDefault);
+  };
+
   const isPKColumn = (col, details) => col.column_name === getPKColumn(details);
 
   const fetchTableData = useCallback(async () => {
@@ -122,11 +136,11 @@ export default function TableDataGridPage() {
 
   useEffect(() => { fetchTableData(); }, [fetchTableData]);
 
-  // Build empty form for insert (exclude PK columns)
+  // Build empty form for insert (exclude auto-generated columns)
   const openInsert = () => {
     const initial = {};
     tableDetails?.columns?.forEach(col => {
-      if (isPKColumn(col, tableDetails)) return;
+      if (isAutoColumn(col)) return; // skip UUID defaults, PKs, serials
       initial[col.column_name] = "";
     });
     setFormData(initial);
@@ -149,8 +163,25 @@ export default function TableDataGridPage() {
   const handleInsert = async () => {
     setSubmitting(true);
     try {
-      // API spec: { row: { col: val, ... } }
-      await api.post(`/projects/${projectID}/tables/${tableName}/data`, { row: formData });
+      // Strip empty-string values for UUID and numeric columns so DB uses defaults
+      const cleanRow = {};
+      Object.entries(formData).forEach(([key, val]) => {
+        if (val === "" || val === null || val === undefined) {
+          // Find the column definition
+          const col = tableDetails?.columns?.find(c => c.column_name === key);
+          const t = col?.data_type?.toLowerCase() || "";
+          const isUUID = t === "uuid";
+          const isNum = ["integer","bigint","smallint","numeric","decimal"].includes(t);
+          if (col?.is_nullable === "YES" || isUUID || isNum) {
+            cleanRow[key] = null; // Let DB handle nulls/defaults
+          }
+          // If NOT NULL and no default, still include as "" so backend validation can report clearly
+          else { cleanRow[key] = val; }
+        } else {
+          cleanRow[key] = val;
+        }
+      });
+      await api.post(`/projects/${projectID}/tables/${tableName}/data`, { row: cleanRow });
       toast.success("Row inserted successfully");
       setInsertOpen(false);
       fetchTableData();
@@ -199,6 +230,7 @@ export default function TableDataGridPage() {
   // Columns for forms
   const pkCol = getPKColumn(tableDetails);
   const editableColumns = tableDetails?.columns?.filter(c => !isPKColumn(c, tableDetails)) || [];
+  const insertableColumns = tableDetails?.columns?.filter(c => !isAutoColumn(c)) || [];
   const allColumns = tableDetails?.columns || [];
 
   const renderFormField = (col, isInsert = true) => {
@@ -317,9 +349,10 @@ export default function TableDataGridPage() {
       {/* Table */}
       <motion.div variants={itemVariants} className="glass-card rounded-[2rem] border-white/10 relative overflow-hidden flex-1 flex flex-col min-h-0 shadow-2xl">
         {loading ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-20">
-            <Loader2 className="h-10 w-10 animate-spin text-blue-500/50 mb-4" />
-            <p className="text-zinc-500 font-medium">Loading table data...</p>
+          <div className="flex-1 flex flex-col p-4 space-y-2">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-12 rounded-xl bg-white/[0.03] border border-white/[0.04] animate-pulse" />
+            ))}
           </div>
         ) : !tableDetails ? (
           <div className="flex-1 flex flex-col items-center justify-center p-20">
@@ -453,7 +486,7 @@ export default function TableDataGridPage() {
             <DialogDescription className="text-zinc-500">Fill in the values for the new row. Primary keys are auto-generated.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {editableColumns.map(col => renderFormField(col, true))}
+            {insertableColumns.map(col => renderFormField(col, true))}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setInsertOpen(false)} className="text-zinc-400 hover:text-white rounded-xl">Cancel</Button>

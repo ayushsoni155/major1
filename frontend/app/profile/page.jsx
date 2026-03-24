@@ -57,10 +57,14 @@ export default function ProfilePage() {
     setChangingPw(true);
     try {
       await api.post("/auth/change-password", { currentPassword: currentPw, newPassword: newPw });
-      toast.success("Password changed! Please log in again.");
+      toast.success("Password changed successfully! You will be signed out in 3 seconds.");
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
-      setTimeout(() => signOut(), 2000);
-    } catch (e) { toast.error(e.response?.data?.message || "Failed to change password"); }
+      setTimeout(() => signOut(), 3000);
+    } catch (e) {
+      // Stay on the profile page — only show error toast, no redirect
+      const msg = e.response?.data?.message || "Failed to change password";
+      toast.error(msg);
+    }
     finally { setChangingPw(false); }
   };
 

@@ -11,6 +11,9 @@ import {
   FileCode2, Blocks, Sparkles, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/global/NotificationBell";
+import { ProfilePopup } from "@/components/global/ProfilePopup";
+import { useAuth } from "@/providers/AuthContext";
 
 // --- Typewriter Hook ---
 function useTypewriter(texts, speed = 60) {
@@ -262,9 +265,7 @@ curl -X DELETE "$BASE/users?id=eq.5" -H "x-api-key: $KEY"` },
   }
 };
 
-import { useAuth } from "@/providers/AuthContext";
 
-// ===================== MAIN PAGE =====================
 export default function LandingPage() {
   const { user } = useAuth();
   const { scrollYProgress } = useScroll();
@@ -314,13 +315,17 @@ export default function LandingPage() {
           <a href="#docs" className="hover:text-white transition-all hover:-translate-y-0.5">Docs</a>
           <a href="#stats" className="hover:text-white transition-all hover:-translate-y-0.5">Stats</a>
         </nav>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {user ? (
-            <Link href="/project/create-project">
-              <Button size="sm" className="bg-white text-black hover:bg-zinc-200 border-0 shadow-lg font-bold rounded-xl px-5 transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]">
-                Dashboard
-              </Button>
-            </Link>
+            <>
+              <Link href="/project/create-project">
+                <Button size="sm" className="bg-white text-black hover:bg-zinc-200 border-0 shadow-lg font-bold rounded-xl px-5 transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]">
+                  Dashboard
+                </Button>
+              </Link>
+              <NotificationBell />
+              <ProfilePopup />
+            </>
           ) : (
             <>
               <Link href="/login" className="text-sm font-medium text-white/70 hover:text-white transition-colors">Sign in</Link>

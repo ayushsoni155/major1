@@ -16,28 +16,11 @@ const getMembers = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// INVITE MEMBER
+// INVITE MEMBER — delegates to the invitation flow (pending invite + email notification)
 const inviteMember = async (req, res, next) => {
-  const { projectId } = req.params;
-  const { email, role } = req.body;
-  const userId = req.user.id;
-  if (!email || !role) return res.status(400).json({ status: 400, data: null, message: 'Email and role required.' });
-  if (!['admin', 'editor', 'viewer'].includes(role)) return res.status(400).json({ status: 400, data: null, message: 'Invalid role.' });
-  try {
-    const { rows: userRows } = await db.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
-    if (!userRows.length) return res.status(404).json({ status: 404, data: null, message: 'User not found.' });
-    const targetUserId = userRows[0].id;
-    const { rows: existing } = await db.query(
-      'SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2',
-      [projectId, targetUserId]
-    );
-    if (existing.length > 0) return res.status(409).json({ status: 409, data: null, message: 'User is already a member.' });
-    const { rows } = await db.query(
-      `INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) RETURNING *`,
-      [projectId, targetUserId, role]
-    );
-    res.status(201).json({ status: 201, data: rows[0], message: 'Member invited.' });
-  } catch (err) { next(err); }
+  // Forward to sendInvitation which handles the full invitation workflow
+  const { sendInvitation } = require('./invitationController');
+  return sendInvitation(req, res, next);
 };
 
 // UPDATE MEMBER ROLE
