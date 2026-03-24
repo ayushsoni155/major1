@@ -1,23 +1,18 @@
 "use client";
+// SessionWatcher: silent — auth notifications are handled by login/signup pages directly.
+import { useRef, useEffect } from "react";
 import { useAuth } from "./AuthContext";
-import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 
 export default function SessionWatcher() {
   const { user } = useAuth();
-  const prevUser = useRef(null);
+  const prevUser = useRef(undefined);
 
   useEffect(() => {
-    // Skip on first render until we know loading is done
-    if (prevUser.current === null && user === null) return;
-
-    if (!prevUser.current && user) {
-      toast.success("🎉 You are logged in!");
-    } else if (prevUser.current && !user) {
-      toast.info("👋 You are logged out.");
+    // Only fire on explicit logout (user was logged in, now null)
+    if (prevUser.current !== undefined && prevUser.current && !user) {
+      // User logged out — silent, ProtectedRoute will redirect
     }
-
-    prevUser.current = user; // update previous state
+    prevUser.current = user;
   }, [user]);
 
   return null;

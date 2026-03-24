@@ -191,6 +191,40 @@
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
   }
+
+  /* Force dark theme variables inside dashboard wrapper */
+  .dashboard-dark {
+    --background: oklch(0.2178 0 0);
+    --foreground: oklch(0.8853 0 0);
+    --card: oklch(0.2435 0 0);
+    --card-foreground: oklch(0.8853 0 0);
+    --popover: oklch(0.1600 0 0);
+    --popover-foreground: oklch(0.8853 0 0);
+    --primary: oklch(0.7058 0 0);
+    --primary-foreground: oklch(0.2178 0 0);
+    --secondary: oklch(0.3092 0 0);
+    --secondary-foreground: oklch(0.8853 0 0);
+    --muted: oklch(0.2850 0 0);
+    --muted-foreground: oklch(0.5999 0 0);
+    --accent: oklch(0.3715 0 0);
+    --accent-foreground: oklch(0.8853 0 0);
+    --destructive: oklch(0.6591 0.1530 22.1703);
+    --destructive-foreground: oklch(1.0000 0 0);
+    --border: oklch(0.3290 0 0);
+    --input: oklch(0.3092 0 0);
+    --ring: oklch(0.7058 0 0);
+    --sidebar: oklch(0.1200 0 0);
+    --sidebar-foreground: oklch(0.8853 0 0);
+    --sidebar-primary: oklch(0.7058 0 0);
+    --sidebar-primary-foreground: oklch(0.2178 0 0);
+    --sidebar-accent: oklch(0.2200 0 0);
+    --sidebar-accent-foreground: oklch(0.8853 0 0);
+    --sidebar-border: oklch(0.2200 0 0);
+    --sidebar-ring: oklch(0.7058 0 0);
+    color-scheme: dark;
+    background-color: #08080f;
+    color: oklch(0.8853 0 0);
+  }
 }
 
 /* --- Premium Skiper UI Utilities --- */

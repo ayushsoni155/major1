@@ -49,11 +49,24 @@ const createApiKey = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET API KEYS (masked)
+// GET API KEYS (masked) — BUG-9 FIX: verify user has project access first
 const getApiKeys = async (req, res, next) => {
   const { projectId } = req.params;
   const userId = req.user.id;
   try {
+    // Verify user has access to this project
+    const { rows: projectRows } = await db.query(
+      `SELECT p.owner_id, pm.role FROM projects p
+       LEFT JOIN project_members pm ON pm.project_id = p.project_id AND pm.user_id = $2
+       WHERE p.project_id = $1`,
+      [projectId, userId]
+    );
+    if (!projectRows.length) return res.status(404).json({ status: 404, data: null, message: 'Project not found.' });
+    const { owner_id, role } = projectRows[0];
+    if (userId !== owner_id && !['admin', 'editor', 'viewer'].includes(role)) {
+      return res.status(403).json({ status: 403, data: null, message: 'Access denied.' });
+    }
+
     const { rows } = await db.query(
       `SELECT id, project_id, key_name, key_prefix, origin_url, permissions, is_active, last_used_at, created_at, expires_at
        FROM api_keys WHERE project_id = $1

@@ -61,6 +61,18 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
+   * Refresh user data from the server (call after profile updates).
+   */
+  const refreshUser = async () => {
+    try {
+      const res = await api.get("/auth/me");
+      setUser(res.data.data);
+    } catch {
+      // ignore
+    }
+  };
+
+  /**
    * Logout — server clears the HttpOnly cookie.
    */
   const signOut = async () => {
@@ -83,6 +95,7 @@ export const AuthProvider = ({ children }) => {
         verifyOtp,
         resendOtp,
         signOut,
+        refreshUser,
       }}
     >
       {children}

@@ -36,6 +36,12 @@ const createProject = async (req, res, next) => {
       [project.project_id, ownerId]
     );
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}";`);
+    // BUG-8 FIX: Grant web_anon (PostgREST role) access to the new project schema
+    // so API key holders can query it via PostgREST. Also notify PostgREST to
+    // reload its schema cache so the new schema is immediately available.
+    await client.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO web_anon;`);
+    await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA "${schemaName}" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO web_anon;`);
+    await client.query(`NOTIFY pgrst, 'reload schema';`);
     await client.query('COMMIT');
     await logAction({ projectId: project.project_id, actorId: ownerId, actionType: ACTION_TYPES.PROJECT_CREATED, details: { project_name: name, schemaName }, ipAddress: req.ip });
     res.status(201).json({ status: 201, data: project, message: 'Project created successfully' });

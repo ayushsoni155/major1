@@ -1,19 +1,12 @@
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/project-sidebar/app-sidebar"
-import HeaderCreateProject from "@/components/headerCreateProject/HeaderCreateProject"
+import HeaderCreateProject from "@/components/headerCreateProject/HeaderCreateProject";
 
-export default function RootLayout({ children }) {
+export default function CreateProjectLayout({ children }) {
   return (
-    <>  
-     <SidebarProvider>
-      <SidebarInset>
-        <HeaderCreateProject/>
-            {children}
-              </SidebarInset>
-    </SidebarProvider>
-  </>
-  )  
+    <div className="dashboard-dark min-h-screen bg-[#08080f]">
+      <HeaderCreateProject />
+      <main className="flex-1">
+        {children}
+      </main>
+    </div>
+  );
 }

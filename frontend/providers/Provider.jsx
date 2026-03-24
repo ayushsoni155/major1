@@ -13,7 +13,7 @@ const allowedRoutes = ["/", "/about", "/login", "/signup"];
 
 export default function Provider({ children }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" disableTransitionOnChange>
       <AuthProvider>
         <ProjectProvider>
            <TableProvider>

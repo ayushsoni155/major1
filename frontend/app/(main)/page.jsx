@@ -372,9 +372,9 @@ export default function LandingPage() {
             transition={{ delay: 0.7, duration: 0.8 }}
             className="flex flex-col sm:flex-row gap-4 mb-16"
           >
-            <Link href="/signup">
+            <Link href={user ? "/project/create-project" : "/signup"}>
               <Button size="lg" className="h-14 px-8 text-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold border-0 shadow-[0_0_40px_rgba(139,92,246,0.4)] rounded-2xl hover:-translate-y-1 transition-all duration-300">
-                Start Building Free <Rocket className="w-5 h-5 ml-2" />
+                {user ? <>Go to Dashboard <Rocket className="w-5 h-5 ml-2" /></> : <>Start Building Free <Rocket className="w-5 h-5 ml-2" /></>}
               </Button>
             </Link>
             <a href="#how-it-works">

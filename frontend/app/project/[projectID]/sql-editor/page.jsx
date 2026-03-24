@@ -191,20 +191,23 @@ export default function SqlEditorPage() {
   return (
     <motion.div
       initial="hidden" animate="visible" variants={containerVariants}
-      className="flex flex-1 flex-col p-6 max-w-[1600px] mx-auto w-full h-[calc(100vh-4rem)] overflow-hidden gap-5"
+      className="flex flex-1 flex-col p-4 sm:p-6 max-w-[1600px] mx-auto w-full gap-4 sm:gap-5"
     >
       {/* Header */}
-      <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-card p-5 rounded-[2rem] border-white/10 shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-indigo-500/15 border border-indigo-500/25">
-            <TerminalSquare className="w-6 h-6 text-indigo-400" />
+      <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-card p-4 sm:p-5 rounded-2xl border-white/10 shrink-0">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="p-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/25">
+            <TerminalSquare className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white">SQL Editor</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Execute raw SQL • <kbd className="bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-400">Ctrl</kbd>+<kbd className="bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-400">Enter</kbd> to run</p>
+            <h1 className="text-lg sm:text-xl font-black text-white">SQL Editor</h1>
+            <p className="text-zinc-500 text-xs mt-0.5 hidden sm:block">Execute raw SQL •{" "}
+              <kbd className="bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-400">Ctrl</kbd>+
+              <kbd className="bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-400">Enter</kbd> to run
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <div className="hidden md:flex flex-col items-end mr-1">
             <span className={`text-xs font-semibold ${error ? "text-red-400" : statusMessage === "Ready" ? "text-zinc-600" : "text-emerald-400"}`}>
               {statusMessage}
@@ -213,25 +216,26 @@ export default function SqlEditorPage() {
           </div>
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className={`flex items-center gap-2 h-10 px-4 rounded-xl border text-sm font-medium transition-all ${showHistory ? "bg-white/10 border-white/20 text-white" : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/8"}`}
+            className={`hidden md:flex items-center gap-2 h-9 sm:h-10 px-3 sm:px-4 rounded-xl border text-sm font-medium transition-all ${showHistory ? "bg-white/10 border-white/20 text-white" : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/8"}`}
           >
-            <History className="w-4 h-4" /> History
+            <History className="w-4 h-4" /> <span className="hidden sm:inline">History</span>
           </button>
           <Button
             onClick={handleRunQuery}
             disabled={loading || !projectId}
-            className="h-10 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold shadow-lg gap-2 transition-all"
+            className="h-9 sm:h-10 px-4 sm:px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold shadow-lg gap-2 transition-all flex-1 sm:flex-none"
           >
             {loading ? <Loader2 className="animate-spin w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
-            {loading ? "Running..." : "Run Query"}
+            {loading ? "Running..." : "Run"}
           </Button>
         </div>
       </motion.div>
 
-      <motion.div variants={itemVariants} className="flex gap-5 flex-1 min-h-0">
+      {/* Editor + Results — stacked on mobile, side-by-side on desktop */}
+      <motion.div variants={itemVariants} className="flex flex-col lg:flex-row gap-4 sm:gap-5 flex-1">
         {/* Editor */}
-        <div className="glass-card rounded-[2rem] border-white/10 overflow-hidden flex flex-col flex-1 relative shadow-2xl">
-          <div className="px-5 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between shrink-0">
+        <div className="glass-card rounded-2xl border-white/10 overflow-hidden flex flex-col shadow-2xl min-h-[260px] sm:min-h-[320px] lg:flex-1">
+          <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <Code2 className="w-4 h-4 text-indigo-400" />
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Editor</span>
@@ -242,22 +246,22 @@ export default function SqlEditorPage() {
               <div className="w-2 h-2 rounded-full bg-green-500/60" />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto w-full bg-[#1e1e2e]">
+          <div className="flex-1 overflow-y-auto w-full bg-[#1e1e2e] min-h-[200px]">
             <CodeMirror
               value={query}
               onChange={setQuery}
               extensions={[sql(), autocompletion()]}
               theme={oneDark}
-              placeholder="-- Write your SQL query here...&#10;SELECT * FROM users LIMIT 10;"
+              placeholder={"-- Write your SQL query here...\nSELECT * FROM users LIMIT 10;"}
               basicSetup={{ lineNumbers: true, highlightActiveLine: true, bracketMatching: true, tabSize: 2 }}
-              className="h-full text-[14px] [&_.cm-scroller]:font-mono [&_.cm-editor]:h-full"
+              className="h-full text-[13px] sm:text-[14px] [&_.cm-scroller]:font-mono [&_.cm-editor]:h-full"
             />
           </div>
         </div>
 
         {/* Results */}
-        <div className="glass-card rounded-[2rem] border-white/10 overflow-hidden flex flex-col flex-1 relative shadow-2xl">
-          <div className="px-5 py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between shrink-0">
+        <div className="glass-card rounded-2xl border-white/10 overflow-hidden flex flex-col shadow-2xl min-h-[200px] sm:min-h-[280px] lg:flex-1">
+          <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-white/10 bg-white/[0.02] flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <Database className="w-4 h-4 text-emerald-400" />
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Results</span>
@@ -271,20 +275,20 @@ export default function SqlEditorPage() {
               ) : null;
             })()}
           </div>
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-3 sm:p-4">
             {renderOutput()}
           </div>
         </div>
 
-        {/* History Panel */}
+        {/* History Panel — desktop only */}
         <AnimatePresence>
           {showHistory && (
             <motion.div
               initial={{ opacity: 0, width: 0, x: 20 }}
-              animate={{ opacity: 1, width: 280, x: 0 }}
+              animate={{ opacity: 1, width: 260, x: 0 }}
               exit={{ opacity: 0, width: 0, x: 20 }}
               transition={{ duration: 0.2 }}
-              className="glass-card rounded-[2rem] border-white/10 overflow-hidden flex flex-col shadow-2xl shrink-0"
+              className="hidden lg:flex glass-card rounded-2xl border-white/10 overflow-hidden flex-col shadow-2xl shrink-0"
             >
               <div className="px-4 py-3 border-b border-white/10 bg-white/[0.02] shrink-0">
                 <div className="flex items-center gap-2">

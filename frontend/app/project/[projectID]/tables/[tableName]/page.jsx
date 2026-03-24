@@ -92,6 +92,16 @@ export default function TableDataGridPage() {
   const [formData, setFormData] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Derive PK column: prefer column named 'id', then first column
+  const getPKColumn = (details) => {
+    if (!details?.columns?.length) return "id";
+    return details.columns.find(c => c.column_name === "id")?.column_name
+      || details.columns[0]?.column_name
+      || "id";
+  };
+
+  const isPKColumn = (col, details) => col.column_name === getPKColumn(details);
+
   const fetchTableData = useCallback(async () => {
     if (!projectID || !tableName) return;
     setLoading(true);
@@ -112,11 +122,11 @@ export default function TableDataGridPage() {
 
   useEffect(() => { fetchTableData(); }, [fetchTableData]);
 
-  // Build empty form for insert
+  // Build empty form for insert (exclude PK columns)
   const openInsert = () => {
     const initial = {};
     tableDetails?.columns?.forEach(col => {
-      if (col.column_name === "id" || col.is_primary_key) return;
+      if (isPKColumn(col, tableDetails)) return;
       initial[col.column_name] = "";
     });
     setFormData(initial);
@@ -152,18 +162,13 @@ export default function TableDataGridPage() {
   const handleEdit = async () => {
     setSubmitting(true);
     try {
-      // API spec: { primaryKey, primaryValue, updates }
-      // Find the PK column (prefer 'id', else first column)
-      const pkCol = tableDetails?.columns?.find(
-        (c) => c.column_name === "id" || c.is_primary_key
-      )?.column_name || "id";
-      const pkVal = editRow?.[pkCol];
-      // Build updates from non-PK fields
+      const pk = getPKColumn(tableDetails);
+      const pkVal = editRow?.[pk];
       const updates = Object.fromEntries(
-        Object.entries(formData).filter(([k]) => k !== pkCol)
+        Object.entries(formData).filter(([k]) => k !== pk)
       );
       await api.patch(`/projects/${projectID}/tables/${tableName}/rows`, {
-        primaryKey: pkCol,
+        primaryKey: pk,
         primaryValue: pkVal,
         updates,
       });
@@ -177,12 +182,9 @@ export default function TableDataGridPage() {
 
   const handleDelete = async () => {
     try {
-      // API spec: { primaryKey, primaryValue }
-      const pkCol = tableDetails?.columns?.find(
-        (c) => c.column_name === "id" || c.is_primary_key
-      )?.column_name || "id";
+      const pk = getPKColumn(tableDetails);
       await api.delete(`/projects/${projectID}/tables/${tableName}/rows`, {
-        data: { primaryKey: pkCol, primaryValue: deleteRow?.[pkCol] }
+        data: { primaryKey: pk, primaryValue: deleteRow?.[pk] }
       });
       toast.success("Row deleted successfully");
       setDeleteOpen(false);
@@ -194,14 +196,15 @@ export default function TableDataGridPage() {
 
   const totalPages = Math.ceil(totalRows / limit) || 1;
 
-  // Editable columns (non-pk for insert)
-  const editableColumns = tableDetails?.columns?.filter(c => c.column_name !== "id" && !c.is_primary_key) || [];
+  // Columns for forms
+  const pkCol = getPKColumn(tableDetails);
+  const editableColumns = tableDetails?.columns?.filter(c => !isPKColumn(c, tableDetails)) || [];
   const allColumns = tableDetails?.columns || [];
 
   const renderFormField = (col, isInsert = true) => {
     const isFk = tableDetails?.foreignKeys?.some(fk => fk.column_name === col.column_name);
     const inputType = getInputType(col.data_type);
-    const readOnly = !isInsert && (col.column_name === "id" || col.is_primary_key);
+    const readOnly = !isInsert && isPKColumn(col, tableDetails);
 
     return (
       <div key={col.column_name} className="space-y-1.5">
@@ -243,7 +246,7 @@ export default function TableDataGridPage() {
   return (
     <motion.div
       initial="hidden" animate="visible" variants={containerVariants}
-      className="flex flex-1 flex-col gap-6 p-6 max-w-[1600px] mx-auto w-full h-[calc(100vh-4rem)] overflow-hidden"
+      className="flex flex-1 flex-col gap-4 sm:gap-6 p-4 sm:p-6 max-w-[1600px] mx-auto w-full"
     >
       {/* Header */}
       <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-card p-6 rounded-[2rem] border-white/10 shrink-0 relative overflow-hidden shadow-2xl">
@@ -371,8 +374,7 @@ export default function TableDataGridPage() {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: rowIndex * 0.02 }}
                           className="border-b border-white/5 hover:bg-white/[0.03] transition-colors group"
-                        >
-                          {/* Actions */}
+                        >          {/* Actions */}
                           <TableCell className="px-3 py-2 border-r border-white/5">
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button

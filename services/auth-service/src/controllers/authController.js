@@ -298,10 +298,86 @@ const login = async (req, res) => {
 // ============================================================
 // LOGOUT — clears cookies
 // ============================================================
+// LOGOUT
+// ============================================================
 const logout = (req, res) => {
   clearAuthCookies(res);
   return res.status(200).json({ status: 200, data: null, message: 'Logged out successfully' });
 };
+
+// ============================================================
+// UPDATE PROFILE — name and/or avatar_url
+// ============================================================
+const updateProfile = async (req, res) => {
+  try {
+    const { name, avatar_url } = req.body;
+    if (!name && !avatar_url) {
+      return res.status(400).json({ status: 400, data: null, message: 'Nothing to update.' });
+    }
+    const fields = [], values = [];
+    let idx = 1;
+    if (name) { fields.push(`name = $${idx++}`); values.push(name.trim()); }
+    if (avatar_url !== undefined) { fields.push(`avatar_url = $${idx++}`); values.push(avatar_url); }
+    values.push(req.user.id);
+    const { rows } = await db.query(
+      `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id, email, name, avatar_url, role, created_at`,
+      values
+    );
+    return res.status(200).json({ status: 200, data: rows[0], message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error('[Auth] UpdateProfile error:', error);
+    res.status(500).json({ status: 500, data: null, message: 'Internal server error' });
+  }
+};
+
+// ============================================================
+// CHANGE PASSWORD
+// ============================================================
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ status: 400, data: null, message: 'Current and new password are required.' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ status: 400, data: null, message: 'New password must be at least 8 characters.' });
+    }
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ status: 404, data: null, message: 'User not found.' });
+    const isValid = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!isValid) return res.status(401).json({ status: 401, data: null, message: 'Current password is incorrect.' });
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await db.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, req.user.id]);
+    return res.status(200).json({ status: 200, data: null, message: 'Password changed successfully. Please log in again.' });
+  } catch (error) {
+    console.error('[Auth] ChangePassword error:', error);
+    res.status(500).json({ status: 500, data: null, message: 'Internal server error' });
+  }
+};
+
+// ============================================================
+// DELETE ACCOUNT
+// ============================================================
+const deleteAccount = async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ status: 400, data: null, message: 'Password required to confirm account deletion.' });
+    }
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (!rows.length) return res.status(404).json({ status: 404, data: null, message: 'User not found.' });
+    const isValid = await bcrypt.compare(password, rows[0].password_hash);
+    if (!isValid) return res.status(401).json({ status: 401, data: null, message: 'Incorrect password.' });
+    // Deactivate instead of hard-delete to preserve audit trail
+    await db.query('UPDATE users SET is_active = false, email = CONCAT(email, $1), updated_at = NOW() WHERE id = $2', [`_deleted_${req.user.id}`, req.user.id]);
+    clearAuthCookies(res);
+    return res.status(200).json({ status: 200, data: null, message: 'Account deleted successfully.' });
+  } catch (error) {
+    console.error('[Auth] DeleteAccount error:', error);
+    res.status(500).json({ status: 500, data: null, message: 'Internal server error' });
+  }
+};
+
 
 // ============================================================
 // GET ME — reads user from cookie JWT
@@ -363,4 +439,4 @@ const refreshToken = async (req, res) => {
   }
 };
 
-module.exports = { register, verifyOtp, resendOtp, login, logout, getMe, refreshToken };
+module.exports = { register, verifyOtp, resendOtp, login, logout, getMe, refreshToken, updateProfile, changePassword, deleteAccount };

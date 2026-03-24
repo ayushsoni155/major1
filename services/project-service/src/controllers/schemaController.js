@@ -20,17 +20,26 @@ const getSchemaStructure = async (req, res, next) => {
     if (!project) return res.status(404).json({ status: 404, data: null, message: 'Project not found' });
     const schemaName = project.schema_name;
     client = await db.pool.connect();
+    // BUG-6 FIX: Use DISTINCT ON to prevent duplicate column rows
+    // when a column has multiple constraints (e.g. PK + FK)
     const { rows } = await client.query(
-      `SELECT t.table_name, c.column_name, c.data_type, tc.constraint_type,
+      `SELECT DISTINCT ON (t.table_name, c.column_name)
+              t.table_name, c.column_name, c.data_type,
+              tc.constraint_type,
               kcu2.table_name AS foreign_table, kcu2.column_name AS foreign_column
        FROM information_schema.tables t
-       JOIN information_schema.columns c ON t.table_name = c.table_name AND t.table_schema = c.table_schema
-       LEFT JOIN information_schema.key_column_usage kcu ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name AND c.table_schema = kcu.table_schema
-       LEFT JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
-       LEFT JOIN information_schema.referential_constraints rc ON kcu.constraint_name = rc.constraint_name
-       LEFT JOIN information_schema.key_column_usage kcu2 ON rc.unique_constraint_name = kcu2.constraint_name
+       JOIN information_schema.columns c
+         ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+       LEFT JOIN information_schema.key_column_usage kcu
+         ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name AND c.table_schema = kcu.table_schema
+       LEFT JOIN information_schema.table_constraints tc
+         ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
+       LEFT JOIN information_schema.referential_constraints rc
+         ON kcu.constraint_name = rc.constraint_name
+       LEFT JOIN information_schema.key_column_usage kcu2
+         ON rc.unique_constraint_name = kcu2.constraint_name
        WHERE t.table_schema = $1
-       ORDER BY t.table_name, c.ordinal_position`,
+       ORDER BY t.table_name, c.column_name, tc.constraint_type`,
       [schemaName]
     );
     const tables = {};

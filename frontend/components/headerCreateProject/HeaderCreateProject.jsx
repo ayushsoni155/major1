@@ -1,29 +1,31 @@
 "use client";
 
 import React from "react";
-import Breadcrump from "@/components/global/Breadcrumb";
+import Link from "next/link";
+import { Zap, ArrowLeft } from "lucide-react";
 import CommandMenu from "../global/CommandMenu";
-import ThemeToggleButton from "@/components/ui/theme-toggle-button";
 
 function HeaderCreateProject() {
   return (
-    <header className="flex h-12 shrink-0 items-center bg-background px-4">
+    <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center bg-[#0d0d14]/90 backdrop-blur-xl border-b border-white/[0.06] px-4 lg:px-6">
       <div className="flex w-full items-center justify-between gap-3">
-        {/* Left Section: Sidebar + Breadcrumb */}
+        {/* Left: Logo + breadcrumb */}
         <div className="flex items-center gap-3 min-w-0">
-          {/* Breadcrumb (responsive, truncate on small) */}
-          <div className="min-w-0 flex-1">
-            <Breadcrump className="truncate text-sm sm:text-base" />
-          </div>
+          <Link href="/" className="flex items-center gap-2 flex-shrink-0 hover:opacity-80 transition-opacity">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center shadow-[0_0_10px_rgba(139,92,246,0.4)]">
+              <Zap className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="hidden sm:block text-sm font-black tracking-tight text-white">RapidBase</span>
+          </Link>
+          <div className="h-4 w-px bg-white/10" />
+          <span className="text-xs text-violet-300 font-semibold">All Projects</span>
         </div>
 
-        {/* Right Section: Search + Theme */}
-        <div className="flex items-center gap-2">
-          {/* Search bar responsive */}
-          <div className=" md:w-40 lg:w-64">
+        {/* Right: Command Menu */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="w-9 md:w-40 lg:w-60">
             <CommandMenu />
           </div>
-        <ThemeToggleButton variant="circle-blur" start="top-right" />
         </div>
       </div>
     </header>

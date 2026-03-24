@@ -13,21 +13,21 @@ import {
 } from "@/components/ui/sidebar"
 import { ProjectSwitcher } from "./project-switcher"
 
-
 export function AppSidebar({ ...props }) {
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
+    <Sidebar
+      collapsible="icon"
+      className="bg-[#0d0d14] border-r border-white/[0.06] [&>[data-sidebar=sidebar]]:bg-[#0d0d14]"
+      {...props}
+    >
+      <SidebarHeader className="border-b border-white/[0.06] pb-2">
         <ProjectSwitcher />
       </SidebarHeader>
-      <SidebarContent>
-        {/* Project-related features */}
-        <NavMain/>
-
-        {/* Platform-level features */}
+      <SidebarContent className="gap-0">
+        <NavMain />
         <NavProjects />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-white/[0.06] pt-2">
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

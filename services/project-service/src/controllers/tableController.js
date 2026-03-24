@@ -101,7 +101,8 @@ const getProjectTables = async (req, res, next) => {
 
 // GET TABLE DETAILS
 const getTableDetails = async (req, res, next) => {
-  const { projectId, tableId } = req.params;
+  // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
+  const { projectId, tableName } = req.params;
   const userId = req.user.id;
   try {
     const project = await getProjectAccess(projectId, userId);
@@ -112,7 +113,7 @@ const getTableDetails = async (req, res, next) => {
     }
     const { rows } = await db.query(
       `SELECT column_name, data_type, is_nullable, column_default, udt_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
-      [schema_name, tableId]
+      [schema_name, tableName]
     );
     if (!rows.length) return res.status(404).json({ status: 404, data: null, message: 'Table not found.' });
     const { rows: fkRows } = await db.query(
@@ -122,16 +123,16 @@ const getTableDetails = async (req, res, next) => {
        JOIN information_schema.constraint_column_usage ccu ON kcu.constraint_name = ccu.constraint_name
        JOIN information_schema.referential_constraints rc ON kcu.constraint_name = rc.constraint_name
        WHERE kcu.table_schema = $1 AND kcu.table_name = $2`,
-      [schema_name, tableId]
+      [schema_name, tableName]
     );
     res.status(200).json({ status: 200, data: { columns: rows, foreignKeys: fkRows }, message: 'Table details retrieved.' });
   } catch (err) { next(err); }
 };
 
-// GET TABLE DATA (rows)
+// GET TABLE DATA (rows) with sort, search, filter
 const getTableData = async (req, res, next) => {
-  const { projectId, tableId } = req.params;
-  const { page = 1, limit = 50 } = req.query;
+  const { projectId, tableName } = req.params;
+  const { page = 1, limit = 50, sortBy, sortOrder = 'asc', search } = req.query;
   const userId = req.user.id;
   try {
     const project = await getProjectAccess(projectId, userId);
@@ -141,8 +142,29 @@ const getTableData = async (req, res, next) => {
       return res.status(403).json({ status: 403, data: null, message: 'Permission denied.' });
     }
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const countResult = await db.query(`SELECT COUNT(*) as total FROM "${schema_name}"."${tableId}"`);
-    const { rows } = await db.query(`SELECT * FROM "${schema_name}"."${tableId}" LIMIT $1 OFFSET $2`, [parseInt(limit), offset]);
+    const { rows: colRows } = await db.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2`,
+      [schema_name, tableName]
+    );
+    const validColumns = colRows.map(r => r.column_name);
+    let whereClause = '';
+    const queryParams = [];
+    if (search && search.trim() && validColumns.length > 0) {
+      const searchClauses = validColumns.map(col => `CAST("${col}" AS TEXT) ILIKE $1`);
+      whereClause = `WHERE ${searchClauses.join(' OR ')}`;
+      queryParams.push(`%${search.trim()}%`);
+    }
+    let orderClause = '';
+    if (sortBy && validColumns.includes(sortBy)) {
+      const direction = sortOrder.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+      orderClause = `ORDER BY "${sortBy}" ${direction}`;
+    }
+    const baseTable = `"${schema_name}"."${tableName}"`;
+    const countResult = await db.query(`SELECT COUNT(*) as total FROM ${baseTable} ${whereClause}`, queryParams);
+    const { rows } = await db.query(
+      `SELECT * FROM ${baseTable} ${whereClause} ${orderClause} LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`,
+      [...queryParams, parseInt(limit), offset]
+    );
     res.status(200).json({
       status: 200,
       data: { rows, total: parseInt(countResult.rows[0].total), page: parseInt(page), limit: parseInt(limit) },
@@ -153,7 +175,8 @@ const getTableData = async (req, res, next) => {
 
 // INSERT ROW
 const insertRow = async (req, res, next) => {
-  const { projectId, tableId } = req.params;
+  // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
+  const { projectId, tableName } = req.params;
   const { row } = req.body;
   const userId = req.user.id;
   if (!row || typeof row !== 'object') return res.status(400).json({ status: 400, data: null, message: 'Row data required.' });
@@ -166,17 +189,18 @@ const insertRow = async (req, res, next) => {
     const vals = Object.values(row);
     const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
     const { rows } = await db.query(
-      `INSERT INTO "${schema_name}"."${tableId}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders}) RETURNING *`,
+      `INSERT INTO "${schema_name}"."${tableName}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders}) RETURNING *`,
       vals
     );
-    await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.ROW_CREATED, details: { tableId, row: rows[0] }, ipAddress: req.ip });
+    await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.ROW_CREATED, details: { tableName, row: rows[0] }, ipAddress: req.ip });
     res.status(201).json({ status: 201, data: rows[0], message: 'Row inserted.' });
   } catch (err) { next(err); }
 };
 
 // UPDATE ROW
 const updateRow = async (req, res, next) => {
-  const { projectId, tableId } = req.params;
+  // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
+  const { projectId, tableName } = req.params;
   const { primaryKey, primaryValue, updates } = req.body;
   const userId = req.user.id;
   if (!primaryKey || !updates) return res.status(400).json({ status: 400, data: null, message: 'Primary key and updates required.' });
@@ -188,17 +212,18 @@ const updateRow = async (req, res, next) => {
     const setClauses = Object.keys(updates).map((col, i) => `"${col}" = $${i + 1}`).join(', ');
     const values = [...Object.values(updates), primaryValue];
     const { rows } = await db.query(
-      `UPDATE "${schema_name}"."${tableId}" SET ${setClauses} WHERE "${primaryKey}" = $${values.length} RETURNING *`,
+      `UPDATE "${schema_name}"."${tableName}" SET ${setClauses} WHERE "${primaryKey}" = $${values.length} RETURNING *`,
       values
     );
-    await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.ROW_UPDATED, details: { tableId, primaryKey, primaryValue }, ipAddress: req.ip });
+    await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.ROW_UPDATED, details: { tableName, primaryKey, primaryValue }, ipAddress: req.ip });
     res.status(200).json({ status: 200, data: rows[0], message: 'Row updated.' });
   } catch (err) { next(err); }
 };
 
 // DELETE ROW
 const deleteRow = async (req, res, next) => {
-  const { projectId, tableId } = req.params;
+  // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
+  const { projectId, tableName } = req.params;
   const { primaryKey, primaryValue } = req.body;
   const userId = req.user.id;
   if (!primaryKey) return res.status(400).json({ status: 400, data: null, message: 'Primary key required.' });
@@ -207,16 +232,15 @@ const deleteRow = async (req, res, next) => {
     if (!project) return res.status(404).json({ status: 404, data: null, message: 'Project not found.' });
     const { schema_name, owner_id, role } = project;
     if (userId !== owner_id && !['admin', 'editor'].includes(role)) return res.status(403).json({ status: 403, data: null, message: 'Permission denied.' });
-    await db.query(`DELETE FROM "${schema_name}"."${tableId}" WHERE "${primaryKey}" = $1`, [primaryValue]);
-    await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.ROW_DELETED, details: { tableId, primaryKey, primaryValue }, ipAddress: req.ip });
+    await db.query(`DELETE FROM "${schema_name}"."${tableName}" WHERE "${primaryKey}" = $1`, [primaryValue]);
+    await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.ROW_DELETED, details: { tableName, primaryKey, primaryValue }, ipAddress: req.ip });
     res.status(200).json({ status: 200, data: null, message: 'Row deleted.' });
   } catch (err) { next(err); }
 };
 
-// DELETE TABLE
+// DELETE TABLE — BUG-2 FIX: read tableName from params, not body
 const deleteTable = async (req, res, next) => {
-  const { projectId } = req.params;
-  const { tableName } = req.body;
+  const { projectId, tableName } = req.params;
   const userId = req.user.id;
   if (!tableName) return res.status(400).json({ status: 400, data: null, message: 'Table name required.' });
   const client = await db.pool.connect();
@@ -234,4 +258,88 @@ const deleteTable = async (req, res, next) => {
   finally { client.release(); }
 };
 
-module.exports = { createTable, getProjectTables, getTableDetails, getTableData, insertRow, updateRow, deleteRow, deleteTable };
+// ALTER TABLE — BUG-3 FIX: new endpoint for schema modifications
+// Supports: ADD COLUMN, DROP COLUMN, RENAME COLUMN, SET DEFAULT, DROP DEFAULT
+const alterTable = async (req, res, next) => {
+  const { projectId, tableName } = req.params;
+  const { alterations } = req.body; // array of { operation, columnName, newColumnName, dataType, defaultValue }
+  const userId = req.user.id;
+
+  if (!tableName) return res.status(400).json({ status: 400, data: null, message: 'Table name required.' });
+  if (!Array.isArray(alterations) || alterations.length === 0) {
+    return res.status(400).json({ status: 400, data: null, message: 'alterations array is required.' });
+  }
+
+  const VALID_OPS = ['ADD_COLUMN', 'DROP_COLUMN', 'RENAME_COLUMN', 'SET_DEFAULT', 'DROP_DEFAULT', 'SET_NOT_NULL', 'DROP_NOT_NULL'];
+
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const project = await getProjectAccess(projectId, userId);
+    if (!project) { await client.query('ROLLBACK'); return res.status(404).json({ status: 404, data: null, message: 'Project not found.' }); }
+    const { schema_name, owner_id, role } = project;
+    if (userId !== owner_id && !['admin', 'editor'].includes(role)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ status: 403, data: null, message: 'Permission denied.' });
+    }
+
+    for (const alt of alterations) {
+      const { operation, columnName, newColumnName, dataType, defaultValue } = alt;
+      if (!operation || !VALID_OPS.includes(operation.toUpperCase())) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ status: 400, data: null, message: `Invalid operation: ${operation}. Valid: ${VALID_OPS.join(', ')}` });
+      }
+      if (!columnName && operation !== 'ADD_COLUMN') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ status: 400, data: null, message: 'columnName is required for this operation.' });
+      }
+
+      const baseAlter = `ALTER TABLE "${schema_name}"."${tableName}"`;
+
+      switch (operation.toUpperCase()) {
+        case 'ADD_COLUMN': {
+          if (!columnName || !dataType) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ status: 400, data: null, message: 'columnName and dataType required for ADD_COLUMN.' });
+          }
+          const err = validateColumn({ name: columnName, dataType });
+          if (err) { await client.query('ROLLBACK'); return res.status(400).json({ status: 400, data: null, message: err }); }
+          let colDef = `"${columnName}" ${dataType}`;
+          if (defaultValue !== undefined && defaultValue !== null) colDef += ` DEFAULT ${defaultValue}`;
+          await client.query(`${baseAlter} ADD COLUMN ${colDef};`);
+          break;
+        }
+        case 'DROP_COLUMN':
+          await client.query(`${baseAlter} DROP COLUMN IF EXISTS "${columnName}" CASCADE;`);
+          break;
+        case 'RENAME_COLUMN':
+          if (!newColumnName) { await client.query('ROLLBACK'); return res.status(400).json({ status: 400, data: null, message: 'newColumnName required for RENAME_COLUMN.' }); }
+          await client.query(`${baseAlter} RENAME COLUMN "${columnName}" TO "${newColumnName}";`);
+          break;
+        case 'SET_DEFAULT':
+          if (defaultValue === undefined) { await client.query('ROLLBACK'); return res.status(400).json({ status: 400, data: null, message: 'defaultValue required for SET_DEFAULT.' }); }
+          await client.query(`${baseAlter} ALTER COLUMN "${columnName}" SET DEFAULT ${defaultValue};`);
+          break;
+        case 'DROP_DEFAULT':
+          await client.query(`${baseAlter} ALTER COLUMN "${columnName}" DROP DEFAULT;`);
+          break;
+        case 'SET_NOT_NULL':
+          await client.query(`${baseAlter} ALTER COLUMN "${columnName}" SET NOT NULL;`);
+          break;
+        case 'DROP_NOT_NULL':
+          await client.query(`${baseAlter} ALTER COLUMN "${columnName}" DROP NOT NULL;`);
+          break;
+        default:
+          break;
+      }
+    }
+
+    await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.TABLE_UPDATED, details: { tableName, schema_name, alterations }, ipAddress: req.ip });
+    await client.query('COMMIT');
+    res.status(200).json({ status: 200, data: { tableName, alterations }, message: 'Table altered successfully.' });
+  } catch (err) { await client.query('ROLLBACK'); next(err); }
+  finally { client.release(); }
+};
+
+module.exports = { createTable, getProjectTables, getTableDetails, getTableData, insertRow, updateRow, deleteRow, deleteTable, alterTable };
+

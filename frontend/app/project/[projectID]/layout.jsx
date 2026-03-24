@@ -1,20 +1,14 @@
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/project-sidebar/app-sidebar"
-import HeadSidebar from "@/components/project-sidebar/HeadSidebar"
+"use client";
 
-export default function RootLayout({ children }) {
+import ProjectTopNav from "@/components/project/ProjectTopNav";
+
+export default function ProjectLayout({ children }) {
   return (
-    <>  
-     <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-         <HeadSidebar/>
-            {children}
-              </SidebarInset>
-    </SidebarProvider>
-  </>
-  )  
+    <div className="dashboard-dark min-h-screen bg-[#08080f]">
+      <ProjectTopNav />
+      <main className="flex-1">
+        {children}
+      </main>
+    </div>
+  );
 }

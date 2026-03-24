@@ -164,6 +164,15 @@ CREATE POLICY audit_log_isolation ON audit_log
     );
 
 -- ============================================
+-- BUG-1 FIX: Bypass RLS for the backend service role
+-- Node.js services enforce multi-tenancy at the application layer
+-- (JWT + owner_id checks). Enabling RLS without setting the session
+-- variable app.current_user_id causes every backend query to return
+-- 0 rows silently. BYPASSRLS ensures backend can read/write normally.
+-- ============================================
+ALTER ROLE rapidbase BYPASSRLS;
+
+-- ============================================
 -- PostgREST Role Setup
 -- ============================================
 DO $$

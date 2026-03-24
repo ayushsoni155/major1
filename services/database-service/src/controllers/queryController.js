@@ -21,7 +21,20 @@ const getProjectSchema = async (projectId) => {
   return rows[0].schema_name;
 };
 
-// EXECUTE SQL QUERY
+/**
+ * Strip SQL comments (-- line comments and /* block comments *\/) and
+ * split the input into individual statements by semicolons.
+ */
+const parseStatements = (rawSql) => {
+  // Remove block comments /* ... */
+  let sql = rawSql.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  // Remove line comments -- ...
+  sql = sql.replace(/--[^\r\n]*/g, ' ');
+  // Split on semicolons, trim, drop empty
+  return sql.split(';').map(s => s.trim()).filter(Boolean);
+};
+
+// EXECUTE SQL QUERY (supports multi-statement batches)
 const executeQuery = async (req, res, next) => {
   const { query } = req.body;
   const userId = req.user.id;
@@ -34,18 +47,22 @@ const executeQuery = async (req, res, next) => {
     return res.status(400).json({ status: 400, data: null, message: 'X-Project-ID header required' });
   }
 
-  const sanitizedQuery = query.trim();
-  const upperQuery = sanitizedQuery.toUpperCase();
+  const statements = parseStatements(query);
+  if (statements.length === 0) {
+    return res.status(400).json({ status: 400, data: null, message: 'No executable SQL statements found' });
+  }
 
-  // Block dangerous operations
-  const forbiddenMatch = FORBIDDEN_KEYWORDS.find(kw => upperQuery.includes(kw));
+  // Block dangerous operations (check on full query string, uppercased)
+  const upperQuery = query.toUpperCase();
+  const forbiddenMatch = FORBIDDEN_KEYWORDS.find(kw => upperQuery.includes(kw.toUpperCase()));
   if (forbiddenMatch) {
     return res.status(403).json({ status: 403, data: null, message: `Restricted operation: ${forbiddenMatch}` });
   }
 
-  // Prevent system schema access
-  if (/\b(public|pg_catalog|information_schema)\b/gi.test(upperQuery)) {
-    return res.status(403).json({ status: 403, data: null, message: 'System schema access restricted' });
+  // BUG-7 FIX: Only block explicit schema-qualified access
+  const schemaQualifiedPattern = /\b(public|pg_catalog|information_schema)\s*\.\s*\w+/i;
+  if (schemaQualifiedPattern.test(query)) {
+    return res.status(403).json({ status: 403, data: null, message: 'Direct system schema access (public.table, pg_catalog.table) is restricted. Use table names directly.' });
   }
 
   const schemaName = await getProjectSchema(projectId);
@@ -54,47 +71,70 @@ const executeQuery = async (req, res, next) => {
   }
 
   const client = await db.pool.connect();
+  const startTime = Date.now();
   try {
     await client.query(`SET search_path TO "${schemaName}";`);
-    const startTime = Date.now();
-    const result = await client.query(sanitizedQuery);
+
+    const results = [];
+    let lastSelectRows = null;
+
+    for (const stmt of statements) {
+      const stmtUpper = stmt.toUpperCase().trim();
+      const result = await client.query(stmt);
+      const isSelect = stmtUpper.startsWith('SELECT') || stmtUpper.startsWith('WITH') || stmtUpper.startsWith('RETURNING');
+      results.push({
+        statement: stmt.length > 80 ? stmt.slice(0, 80) + '…' : stmt,
+        command: result.command || 'UNKNOWN',
+        rowCount: result.rowCount || 0,
+        rows: result.rows || [],
+      });
+      if (isSelect && result.rows.length > 0) {
+        lastSelectRows = result.rows;
+      }
+    }
+
     const durationMs = Date.now() - startTime;
 
-    const responseData = result.rows.length > 0
-      ? result.rows
-      : { message: 'Query executed successfully', rowCount: result.rowCount };
+    // Determine what to return:
+    // - If any statement returned SELECT rows, return those
+    // - Otherwise return the multi-statement summary
+    const responseData = lastSelectRows
+      ? lastSelectRows
+      : results.length === 1
+        ? { message: 'Query executed successfully', command: results[0].command, rowCount: results[0].rowCount }
+        : { message: `${results.length} statements executed successfully`, statements: results.map(r => `${r.command} (${r.rowCount} rows)`) };
 
-    // Save to query history
+    // Save to query history (save original)
     await db.query(
       `INSERT INTO query_history (project_id, user_id, query_text, query_status, execution_time_ms, rows_affected)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [projectId, userId, sanitizedQuery, 'success', durationMs, result.rowCount || 0]
+      [projectId, userId, query.trim(), 'success', durationMs, results.reduce((s, r) => s + (r.rowCount || 0), 0)]
     );
 
     // Audit log
     await db.query(
       `INSERT INTO audit_log (project_id, actor_id, action_type, details, ip_address) VALUES ($1, $2, $3, $4, $5)`,
-      [projectId, userId, 'QUERY_EXECUTED', JSON.stringify({ query: sanitizedQuery, durationMs, affectedRows: result.rowCount }), req.ip]
+      [projectId, userId, 'QUERY_EXECUTED', JSON.stringify({ statements: statements.length, durationMs }), req.ip]
     );
 
     res.status(200).json({
       status: 200,
-      data: { executionTimeMs: durationMs, data: responseData },
+      data: { executionTimeMs: durationMs, data: responseData, statementsExecuted: results.length },
       message: 'Query executed successfully'
     });
   } catch (error) {
-    // Save failed query
     await db.query(
       `INSERT INTO query_history (project_id, user_id, query_text, query_status, error_message)
        VALUES ($1, $2, $3, $4, $5)`,
-      [projectId, userId, sanitizedQuery, 'failed', error.message]
-    );
+      [projectId, userId, query.trim(), 'failed', error.message]
+    ).catch(() => {});
 
     res.status(400).json({ status: 400, data: { error: error.message }, message: 'Error executing query' });
   } finally {
     client.release();
   }
 };
+
 
 // GET QUERY HISTORY
 const getQueryHistory = async (req, res, next) => {
