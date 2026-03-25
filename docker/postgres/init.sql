@@ -246,3 +246,16 @@ CREATE INDEX IF NOT EXISTS idx_invitations_token   ON project_invitations(token)
 CREATE INDEX IF NOT EXISTS idx_invitations_invitee ON project_invitations(invitee_id, status);
 CREATE INDEX IF NOT EXISTS idx_invitations_project ON project_invitations(project_id);
 
+-- ============================================
+-- Analytics Dashboards Table
+-- Persists per-project dashboard widget layouts and configurations
+-- ============================================
+CREATE TABLE IF NOT EXISTS analytics_dashboards (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    layout     JSONB NOT NULL DEFAULT '[]',
+    widgets    JSONB NOT NULL DEFAULT '[]',
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analytics_dashboards_project ON analytics_dashboards(project_id);

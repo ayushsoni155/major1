@@ -41,7 +41,7 @@ const getTableColumns = async (req, res, next) => {
 // GET aggregated analytics data
 const getChartData = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
-  const { tableName, xField, yField, aggregation = 'COUNT' } = req.query;
+  const { tableName, xField, yField, aggregation = 'COUNT', limit = 50 } = req.query;
 
   if (!projectId || !tableName || !xField) {
     return res.status(400).json({ status: 400, data: null, message: 'projectId, tableName, and xField required' });
@@ -52,9 +52,10 @@ const getChartData = async (req, res, next) => {
     return res.status(400).json({ status: 400, data: null, message: `Invalid aggregation. Use: ${validAggregations.join(', ')}` });
   }
 
+  const safeLimit = Math.min(Math.max(1, parseInt(limit) || 50), 500);
+
   try {
-    // Check cache
-    const cacheKey = `analytics:${projectId}:${tableName}:${xField}:${yField || ''}:${aggregation}`;
+    const cacheKey = `analytics:${projectId}:${tableName}:${xField}:${yField || ''}:${aggregation}:${safeLimit}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.status(200).json({ status: 200, data: JSON.parse(cached), message: 'Chart data (cached)' });
 
@@ -63,21 +64,18 @@ const getChartData = async (req, res, next) => {
     const schema = projectRows[0].schema_name;
 
     let sql;
-    if (yField) {
+    if (yField && yField !== 'none') {
       sql = `SELECT "${xField}" as label, ${aggregation.toUpperCase()}("${yField}") as value
              FROM "${schema}"."${tableName}"
-             GROUP BY "${xField}" ORDER BY "${xField}" LIMIT 100`;
+             GROUP BY "${xField}" ORDER BY value DESC LIMIT ${safeLimit}`;
     } else {
       sql = `SELECT "${xField}" as label, COUNT(*) as value
              FROM "${schema}"."${tableName}"
-             GROUP BY "${xField}" ORDER BY value DESC LIMIT 100`;
+             GROUP BY "${xField}" ORDER BY value DESC LIMIT ${safeLimit}`;
     }
 
     const { rows } = await db.query(sql);
-
-    // Cache for 5 minutes
     await redis.set(cacheKey, JSON.stringify(rows), 'EX', 300);
-
     res.status(200).json({ status: 200, data: rows, message: 'Chart data retrieved' });
   } catch (err) { next(err); }
 };
@@ -115,4 +113,43 @@ const getTableStats = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getTables, getTableColumns, getChartData, getTableStats };
+// SAVE dashboard layout + widgets for a project (upsert)
+const saveDashboard = async (req, res, next) => {
+  const projectId = req.headers['x-project-id'];
+  const { layout, widgets } = req.body;
+
+  if (!projectId) return res.status(400).json({ status: 400, data: null, message: 'X-Project-ID required' });
+  if (!Array.isArray(layout) || !Array.isArray(widgets)) {
+    return res.status(400).json({ status: 400, data: null, message: 'layout and widgets must be arrays' });
+  }
+
+  try {
+    await db.query(
+      `INSERT INTO analytics_dashboards (project_id, layout, widgets, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (project_id)
+       DO UPDATE SET layout = EXCLUDED.layout, widgets = EXCLUDED.widgets, updated_at = NOW()`,
+      [projectId, JSON.stringify(layout), JSON.stringify(widgets)]
+    );
+    res.status(200).json({ status: 200, data: null, message: 'Dashboard saved' });
+  } catch (err) { next(err); }
+};
+
+// GET saved dashboard for a project
+const getDashboard = async (req, res, next) => {
+  const projectId = req.headers['x-project-id'];
+  if (!projectId) return res.status(400).json({ status: 400, data: null, message: 'X-Project-ID required' });
+
+  try {
+    const { rows } = await db.query(
+      'SELECT layout, widgets, updated_at FROM analytics_dashboards WHERE project_id = $1',
+      [projectId]
+    );
+    if (!rows.length) {
+      return res.status(200).json({ status: 200, data: { layout: [], widgets: [] }, message: 'No saved dashboard' });
+    }
+    res.status(200).json({ status: 200, data: rows[0], message: 'Dashboard loaded' });
+  } catch (err) { next(err); }
+};
+
+module.exports = { getTables, getTableColumns, getChartData, getTableStats, saveDashboard, getDashboard };

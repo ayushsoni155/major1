@@ -23,6 +23,13 @@ const FORBIDDEN_KEYWORDS = [
   'SET ROLE', 'SET SESSION AUTHORIZATION',
   'DROP USER', 'CREATE USER', 'ALTER USER',
   'ALTER SYSTEM',
+  // Transaction control — the server wraps all statements in its own
+  // BEGIN/COMMIT. User-supplied transaction commands would break schema
+  // isolation (SET LOCAL only applies to the current transaction) and
+  // could leave the connection in an inconsistent state.
+  'BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE SAVEPOINT',
+  // Prevent overriding the enforced search_path or statement_timeout
+  'SET SEARCH_PATH', 'SET LOCAL SEARCH_PATH',
 ];
 
 // ============================================
@@ -165,14 +172,26 @@ const executeQuery = async (req, res, next) => {
   const client     = await db.pool.connect();
   const startTime  = Date.now();
   try {
-    // [SECURITY] Set search_path to ONLY the project schema + pg_catalog.
-    //  - Omitting "public" means bare names like "users" resolve ONLY in the
-    //    project schema, never to public.users.
-    //  - pg_catalog is included so built-in functions (now(), count(), etc.) work.
-    //  - SET LOCAL scopes this to the current transaction only (extra safety).
-    //  - schemaName is always "proj_<uuid>" (generated, no user input) so
-    //    quoting it is a final safety guard against any edge case.
-    const safeSchema = schemaName.replace(/"/g, ''); // strip any stray quotes
+    // [SECURITY] schemaName is always "proj_<uuid>" — generated server-side, never user input.
+    const safeSchema = schemaName.replace(/"/g, ''); // strip any stray quotes just in case
+
+    // STEP 1: Set the SESSION-level search_path immediately on this client.
+    //   This is the primary isolation guard: any bare table name (e.g. "users")
+    //   will resolve ONLY inside the project schema. "public" is explicitly excluded.
+    //   pg_catalog must come AFTER the project schema so user-defined functions take
+    //   precedence, but built-ins (now(), count(), etc.) still work.
+    await client.query(`SET search_path TO "${safeSchema}", pg_catalog`);
+
+    // STEP 2: Limit query execution time to 30 seconds per statement.
+    await client.query(`SET statement_timeout = '30s'`);
+
+    // STEP 3: Begin an explicit transaction so that SET LOCAL works correctly.
+    //   SET LOCAL is only effective inside an explicit transaction block.
+    //   Without BEGIN, SET LOCAL silently becomes a session-level SET.
+    //   Having both session-level (step 1) and LOCAL (inside transaction) is
+    //   defence-in-depth: the session-level guard exists for any code that runs
+    //   outside the transaction, and LOCAL re-affirms isolation inside it.
+    await client.query('BEGIN');
     await client.query(`SET LOCAL search_path TO "${safeSchema}", pg_catalog`);
 
     const results        = [];
@@ -203,6 +222,10 @@ const executeQuery = async (req, res, next) => {
         ? { message: 'Query executed successfully', command: results[0].command, rowCount: results[0].rowCount }
         : { message: `${results.length} statements executed`, statements: results.map((r) => `${r.command} (${r.rowCount} rows)`) };
 
+    // Commit the transaction — all user statements ran inside BEGIN/COMMIT so
+    // SET LOCAL search_path was properly scoped to this transaction.
+    await client.query('COMMIT');
+
     // ── Persist to audit tables (main pool — writes to public schema, correct) ──
     // NOTE: We intentionally use db.query (main pool) here rather than the
     // isolated `client` because the `client` has search_path set to the project
@@ -224,6 +247,10 @@ const executeQuery = async (req, res, next) => {
       message : 'Query executed successfully',
     });
   } catch (error) {
+    // Rollback the transaction so the connection is returned to the pool in a
+    // clean state. Failing to rollback leaves the connection in an aborted
+    // transaction state and will break all subsequent queries on that client.
+    await client.query('ROLLBACK').catch(() => {});
     db.query(
       'INSERT INTO query_history (project_id, user_id, query_text, query_status, error_message) VALUES ($1, $2, $3, $4, $5)',
       [projectId, userId, query.trim(), 'failed', error.message]
