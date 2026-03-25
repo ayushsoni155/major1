@@ -698,21 +698,18 @@ export default function AnalyticsPage() {
     if (!target) { toast.error("Nothing to export"); return; }
     setDownloading(true);
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(target, {
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(target, {
         backgroundColor: "#08080f",
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        // Skip elements that poison canvas (foreign SVG fonts, etc.)
-        ignoreElements: (el) =>
-          el.tagName === "STYLE" ||
-          (el.tagName === "LINK" && el.rel === "stylesheet"),
+        pixelRatio: 2,
+        cacheBust: true,
+        skipFonts: false,
+        filter: (node) =>
+          !(node.tagName === "LINK" && node.rel === "stylesheet"),
       });
       const link = document.createElement("a");
       link.download = `${selectedProject?.project_name || "dashboard"}-analytics.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.href = dataUrl;
       link.click();
       toast.success("Dashboard exported as PNG");
     } catch (err) {
