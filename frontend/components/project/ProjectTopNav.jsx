@@ -18,7 +18,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRouter } from "nextjs-toploader/app";
 import { CreateProjectDialog } from "@/components/project/create-project-dialog";
-import { NotificationBell } from "@/components/global/NotificationBell";
+import NotificationBell from "@/components/notification/notificationUse";
 
 const NAV_ITEMS = [
   { label: "Dashboard",   icon: LayoutDashboard, suffix: "dashboard" },

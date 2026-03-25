@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Zap, Search, X } from "lucide-react";
 import { ProfilePopup } from "@/components/global/ProfilePopup";
-import { NotificationBell } from "@/components/global/NotificationBell";
+import NotificationBell from "@/components/notification/notificationUse";
 import { useAuth } from "@/providers/AuthContext";
 import { Input } from "@/components/ui/input";
 

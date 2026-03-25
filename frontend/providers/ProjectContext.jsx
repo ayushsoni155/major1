@@ -4,14 +4,20 @@ import { createContext, useContext, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
 import axios from "@/utils/axios";
+import { useAuth } from "@/providers/AuthContext";
 
 const ProjectContext = createContext();
 
 const fetcher = (url) => axios.get(url).then((res) => res.data.data);
 
 export const ProjectProvider = ({ children }) => {
-  // SWR for fetching all projects
-  const { data: projects, error, isLoading, mutate } = useSWR("/projects/", fetcher, {
+  const { user, loading: authLoading } = useAuth();
+
+  // Only fetch projects after auth has resolved AND user is logged in.
+  // Passing null as key disables SWR — no API call until authenticated.
+  const swrKey = !authLoading && user ? "/projects/" : null;
+
+  const { data: projects, error, isLoading, mutate } = useSWR(swrKey, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     dedupingInterval: 300_000, // 5 minutes — only re-fetch on explicit mutate() calls

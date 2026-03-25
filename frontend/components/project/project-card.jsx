@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { MoreVertical, Trash2, Pencil, Plus, Database, ArrowRight, Archive, ArchiveRestore, ArchiveIcon } from "lucide-react";
+import { MoreVertical, Trash2, Pencil, Plus, Database, ArrowRight, Archive, ArchiveRestore, Crown } from "lucide-react";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { DeleteProjectAlert } from "./delete-project-alert";
 import { CreateProjectDialog } from "./create-project-dialog";
@@ -52,18 +52,23 @@ export function ProjectCard({ project, mutate }) {
         <div className="absolute inset-0 bg-gradient-to-br from-violet-500/0 via-violet-500/0 to-violet-500/8 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl" />
 
         {/* Top row */}
-        <div className="flex items-start justify-between mb-5 relative z-10">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-start justify-between mb-4 relative z-10">
+          <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
             <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shadow-inner flex-shrink-0">
               <Database className="w-4 h-4 text-violet-400" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 className="text-sm font-bold text-white leading-tight truncate">
                 {project.project_name}
               </h3>
               <p className="font-mono text-[10px] text-zinc-600 mt-0.5 truncate">
                 {project.schema_name}
               </p>
+              {project.project_description && (
+                <p className="text-[11px] text-zinc-500 mt-1 truncate">
+                  {project.project_description}
+                </p>
+              )}
             </div>
           </div>
 
@@ -123,6 +128,15 @@ export function ProjectCard({ project, mutate }) {
             <span className="text-[11px] font-medium text-zinc-400 capitalize">
               {project.project_status}
             </span>
+            {project.owner_name && (
+              <>
+                <span className="text-zinc-700">·</span>
+                <span className="flex items-center gap-1 text-[11px] text-zinc-500 truncate max-w-[90px]">
+                  <Crown className="w-2.5 h-2.5 text-amber-500/70 flex-shrink-0" />
+                  {project.owner_name}
+                </span>
+              </>
+            )}
           </div>
           <Button
             onClick={handleSelectClick}

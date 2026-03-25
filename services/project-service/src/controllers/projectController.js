@@ -57,8 +57,10 @@ const createProject = async (req, res, next) => {
 const getUserProjects = async (req, res, next) => {
   try {
     const { rows } = await db.query(
-      `SELECT p.*, pm.role FROM projects p
+      `SELECT p.*, pm.role, u.name AS owner_name
+       FROM projects p
        LEFT JOIN project_members pm ON p.project_id = pm.project_id AND pm.user_id = $1
+       LEFT JOIN users u ON p.owner_id = u.id
        WHERE p.owner_id = $1 OR pm.user_id IS NOT NULL
        ORDER BY p.created_at DESC`,
       [req.user.id]

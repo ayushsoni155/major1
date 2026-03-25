@@ -11,7 +11,7 @@ import {
   FileCode2, Blocks, Sparkles, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { NotificationBell } from "@/components/global/NotificationBell";
+import NotificationBell from "@/components/notification/notificationUse";
 import { ProfilePopup } from "@/components/global/ProfilePopup";
 import { useAuth } from "@/providers/AuthContext";
 

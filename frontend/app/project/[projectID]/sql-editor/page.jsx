@@ -90,9 +90,11 @@ export default function SqlEditorPage() {
         { headers: { "X-Project-ID": projectId } }
       );
       const elapsed = ((performance.now() - start) / 1000).toFixed(3);
-      setOutput(res.data.data);
+      // Backend: { data: { executionTimeMs, data: <rows|summary>, statementsExecuted } }
+      const payload = res.data?.data;
+      setOutput(payload?.data ?? payload);
       setExecutionTime(elapsed);
-      setStatusMessage("Success");
+      setStatusMessage(`Success · ${payload?.statementsExecuted ?? 1} stmt`);
       mutateHistory();
     } catch (err) {
       const elapsed = ((performance.now() - start) / 1000).toFixed(3);
@@ -132,6 +134,15 @@ export default function SqlEditorPage() {
         <p className="text-sm">Execute a query to see results</p>
         <p className="text-xs mt-1 opacity-60">Tip: Press <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-zinc-400">Ctrl</kbd>+<kbd className="bg-white/10 px-1.5 py-0.5 rounded text-zinc-400">Enter</kbd> to run</p>
       </div>
+    );
+
+    // Non-SELECT result (INSERT, UPDATE, DELETE, CREATE, etc.)
+    if (!Array.isArray(output) && typeof output === "object" && (output.message || output.command)) return (
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 font-mono text-sm">
+        <div className="flex items-center gap-2 font-bold mb-1"><TerminalSquare size={14} /> {output.message || `${output.command} successful`}</div>
+        {output.rowCount !== undefined && <div className="text-xs opacity-70 mt-1">{output.rowCount} row(s) affected</div>}
+        <div className="text-xs opacity-70 mt-2">Execution time: {executionTime}s</div>
+      </motion.div>
     );
 
     const rows = Array.isArray(output) ? output : (output.data || []);

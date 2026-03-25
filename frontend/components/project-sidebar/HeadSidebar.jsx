@@ -5,6 +5,7 @@ import Breadcrumb from "@/components/global/Breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import CommandMenu from "../global/CommandMenu";
+import NotificationBell from "@/components/notification/notificationUse";
 
 function HeadSidebar() {
   return (
@@ -22,8 +23,9 @@ function HeadSidebar() {
           </div>
         </div>
 
-        {/* Right Section: Command Menu */}
+        {/* Right Section: Notifications + Command Menu */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          <NotificationBell />
           <div className="md:w-40 lg:w-60">
             <CommandMenu />
           </div>
