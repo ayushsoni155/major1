@@ -180,170 +180,100 @@ All requests interact with the platform through the unified Nginx API Gateway. A
 ### 1. Authentication Service (`/api/auth/*`)
 Manages user lifecycle, tokens, and profiles. Limits apply via Redis (e.g., 20 req/15min).
 
-*   **`POST /api/auth/register`**
-    *   **Input Body:** `{ "email": "user@example.com", "password": "SecurePassword123", "name": "John Doe" }`
-    *   **Success Output (201):** `{ "status": 201, "data": { "userId": "uuid" }, "message": "OTP sent to email" }`
-*   **`POST /api/auth/verify-otp`**
-    *   **Input Body:** `{ "email": "user@example.com", "otp": "123456" }`
-    *   **Success Output (200):** `{ "status": 200, "data": { "user", "token", "refreshToken" }, "message": "Email verified successfully" }`
-*   **`POST /api/auth/resend-otp`**
-    *   **Input Body:** `{ "email": "user@example.com" }`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "OTP resent successfully" }`
-*   **`POST /api/auth/login`**
-    *   **Input Body:** `{ "email": "user@example.com", "password": "SecurePassword123" }`
-    *   **Success Output (200):** `{ "status": 200, "data": { "token": "jwt", "refreshToken": "jwt" }, "message": "Logged in successfully" }`
-*   **`POST /api/auth/refresh`**
-    *   **Input Body:** `{ "refreshToken": "jwt" }`
-    *   **Success Output (200):** `{ "status": 200, "data": { "token": "new-jwt", "refreshToken": "new-jwt" }, "message": "Tokens refreshed" }`
-*   **`POST /api/auth/logout`**
-    *   **Input:** None (Requires active session)
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Logged out" }`
-*   **`GET /api/auth/me`**
-    *   **Input Header:** `Authorization: Bearer <token>`
-    *   **Success Output (200):** `{ "status": 200, "data": { "id", "email", "name", "verified" }, "message": "User fetched" }`
-*   **`PATCH /api/auth/profile`**
-    *   **Input Body:** `{ "name": "New Name" }`
-    *   **Success Output (200):** `{ "status": 200, "data": { "id", "name" }, "message": "Profile updated" }`
-*   **`POST /api/auth/change-password`**
-    *   **Input Body:** `{ "oldPassword": "...", "newPassword": "..." }`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Password changed" }`
-*   **`DELETE /api/auth/account`**
-    *   **Input:** None
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Account deleted permanently" }`
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Body: `{ "email", "password", "name" }` | `201` - `{ "status", "data": { "userId" }, "message" }` | Register new user, sends OTP |
+| `POST` | `/api/auth/verify-otp` | Body: `{ "email", "otp" }` | `200` - `{ "status", "data": { "user", "token", "refreshToken" } }` | Verify OTP to login |
+| `POST` | `/api/auth/resend-otp` | Body: `{ "email" }` | `200` - `{ "status", "data": null, "message" }` | Resend OTP |
+| `POST` | `/api/auth/login` | Body: `{ "email", "password" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Login user |
+| `POST` | `/api/auth/refresh` | Body: `{ "refreshToken" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Refresh JWT tokens |
+| `POST` | `/api/auth/logout` | None (Requires active session) | `200` - `{ "status", "data": null, "message" }` | Logout user |
+| `GET` | `/api/auth/me` | Header: `Authorization: Bearer <token>` | `200` - `{ "status", "data": { "id", "email", "name", "verified" } }` | Get current user |
+| `PATCH` | `/api/auth/profile` | Body: `{ "name" }` | `200` - `{ "status", "data": { "id", "name" }, "message" }` | Update profile |
+| `POST` | `/api/auth/change-password` | Body: `{ "oldPassword", "newPassword" }` | `200` - `{ "status", "data": null, "message" }` | Change password |
+| `DELETE` | `/api/auth/account` | None | `200` - `{ "status", "data": null, "message" }` | Delete account permanently |
 
 ### 2. Project Service (`/api/projects/*` & `/api/schema/*`)
 Handles workspaces, schemas, table configuration, RBAC members, and keys. Requires Auth.
 
-*   **`GET /api/projects/`**
-    *   **Input Header:** `Authorization: Bearer <token>`
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "id", "name", "role", "createdAt" } ] }`
-*   **`POST /api/projects/`**
-    *   **Input Body:** `{ "name": "New Project Space" }`
-    *   **Success Output (201):** `{ "status": 201, "data": { "id": "project-uuid" }, "message": "Project created successfully" }`
-*   **`GET /api/projects/:projectId`**
-    *   **Input Param:** `projectId` (uuid)
-    *   **Success Output (200):** `{ "status": 200, "data": { "id", "name", "ownerId", "schema" } }`
-*   **`PATCH /api/projects/:projectId`**
-    *   **Input Body:** `{ "name": "Updated Name" }`
-    *   **Success Output (200):** `{ "status": 200, "data": { ... }, "message": "Project updated" }`
-*   **`DELETE /api/projects/:projectId`**
-    *   **Input Param:** `projectId`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Project deleted" }`
+#### Projects
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/projects/` | Header: `Authorization: Bearer <token>` | `200` - `{ "status", "data": [ { "id", "name", "role", "createdAt" } ] }` | List projects |
+| `POST` | `/api/projects/` | Body: `{ "name" }` | `201` - `{ "status", "data": { "id" }, "message" }` | Create project |
+| `GET` | `/api/projects/:projectId` | Param: `projectId` | `200` - `{ "status", "data": { "id", "name", "ownerId", "schema" } }` | Get project details |
+| `PATCH` | `/api/projects/:projectId` | Body: `{ "name" }` | `200` - `{ "status", "data": { ... }, "message" }` | Update project |
+| `DELETE` | `/api/projects/:projectId` | Param: `projectId` | `200` - `{ "status", "data": null, "message" }` | Delete project |
 
-**Schema & Tables:**
-*   **`GET /api/schema/:projectId`**
-    *   **Input Param:** `projectId`
-    *   **Success Output (200):** `{ "status": 200, "data": { "schema": [...] } }`
-*   **`GET /api/projects/:projectId/tables`**
-    *   **Input Param:** `projectId`
-    *   **Success Output (200):** `{ "status": 200, "data": [ "users", "products" ] }`
-*   **`POST /api/projects/:projectId/tables`**
-    *   **Input Body:** `{ "tableName": "users", "columns": [ { "name": "id", "type": "uuid", "isPrimary": true } ] }`
-    *   **Success Output (201):** `{ "status": 201, "data": null, "message": "Table created" }`
-*   **`GET /api/projects/:projectId/tables/:tableName`**
-    *   **Input Params:** `projectId`, `tableName`
-    *   **Success Output (200):** `{ "status": 200, "data": { "columns": [...] } }`
-*   **`PATCH /api/projects/:projectId/tables/:tableName`**
-    *   **Input Body:** `{ "actions": [ { "type": "ADD_COLUMN", "name": "age", "dataType": "integer" } ] }`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Table altered successfully" }`
-*   **`DELETE /api/projects/:projectId/tables/:tableName`**
-    *   **Input Params:** `projectId`, `tableName`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Table dropped" }`
+#### Schema & Tables
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/schema/:projectId` | Param: `projectId` | `200` - `{ "status", "data": { "schema": [...] } }` | Get full schema |
+| `GET` | `/api/projects/:projectId/tables` | Param: `projectId` | `200` - `{ "status", "data": [ "users", "products" ] }` | List tables |
+| `POST` | `/api/projects/:projectId/tables` | Body: `{ "tableName", "columns": [...] }` | `201` - `{ "status", "data": null, "message" }` | Create table |
+| `GET` | `/api/projects/:projectId/tables/:tableName` | Params: `projectId`, `tableName` | `200` - `{ "status", "data": { "columns": [...] } }` | Get table details |
+| `PATCH` | `/api/projects/:projectId/tables/:tableName` | Body: `{ "actions": [...] }` | `200` - `{ "status", "data": null, "message" }` | Alter table |
+| `DELETE` | `/api/projects/:projectId/tables/:tableName` | Params: `projectId`, `tableName` | `200` - `{ "status", "data": null, "message" }` | Drop table |
 
-**Table Data (UI CRUD Actions):**
-*   **`GET /api/projects/:projectId/tables/:tableName/data`**
-    *   **Input Query:** optionally `?limit=50&offset=0`
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "id": 1, "col": "val" } ] }`
-*   **`POST /api/projects/:projectId/tables/:tableName/data`**
-    *   **Input Body:** `{ "row": { "name": "New Item" } }`
-    *   **Success Output (201):** `{ "status": 201, "data": { "id": 1 }, "message": "Row inserted" }`
-*   **`PATCH /api/projects/:projectId/tables/:tableName/rows`**
-    *   **Input Body:** `{ "id": 1, "updates": { "name": "Updated" } }`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Row updated" }`
-*   **`DELETE /api/projects/:projectId/tables/:tableName/rows`**
-    *   **Input Query / Body:** `{ "id": 1 }`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Row deleted" }`
+#### Table Data (UI CRUD Actions)
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/projects/:projectId/tables/:tableName/data` | Query: `?limit=50&offset=0` | `200` - `{ "status", "data": [ { "id": 1, "col": "val" } ] }` | Get rows |
+| `POST` | `/api/projects/:projectId/tables/:tableName/data` | Body: `{ "row": { ... } }` | `201` - `{ "status", "data": { "id": 1 }, "message" }` | Insert row |
+| `PATCH` | `/api/projects/:projectId/tables/:tableName/rows` | Body: `{ "id", "updates": { ... } }` | `200` - `{ "status", "data": null, "message" }` | Update row |
+| `DELETE` | `/api/projects/:projectId/tables/:tableName/rows` | Option: Query or Body `{ "id" }` | `200` - `{ "status", "data": null, "message" }` | Delete row |
 
-**Members & Roles:**
-*   **`GET /api/projects/:projectId/members`**
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "userId", "email", "role" } ] }`
-*   **`POST /api/projects/:projectId/members`**
-    *   **Input Body:** `{ "email": "team@example.com", "role": "editor" }`
-    *   **Success Output (201):** `{ "status": 201, "data": null, "message": "Invitation sent" }`
-*   **`PATCH /api/projects/:projectId/members/:memberId`**
-    *   **Input Body:** `{ "role": "admin" }`
-    *   **Success Output (200):** `{ "status": 200, "message": "Role updated" }`
-*   **`DELETE /api/projects/:projectId/members/:memberId`**
-    *   **Success Output (200):** `{ "status": 200, "message": "Member removed" }`
+#### Members & Roles
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/projects/:projectId/members` | Param: `projectId` | `200` - `{ "status", "data": [ { "userId", "email", "role" } ] }` | List members |
+| `POST` | `/api/projects/:projectId/members` | Body: `{ "email", "role" }` | `201` - `{ "status", "data": null, "message" }` | Invite member |
+| `PATCH` | `/api/projects/:projectId/members/:memberId` | Body: `{ "role" }` | `200` - `{ "status", "message" }` | Update role |
+| `DELETE` | `/api/projects/:projectId/members/:memberId` | Params: `projectId`, `memberId` | `200` - `{ "status", "message" }` | Remove member |
 
-**Invitations & Notifications:**
-*   **`GET /api/projects/invitations/mine`**
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "projectId", "role", "token" } ] }`
-*   **`POST /api/projects/invitations/accept/:token`**
-    *   **Success Output (200):** `{ "status": 200, "data": { "projectId" }, "message": "Invitation accepted" }`
-*   **`POST /api/projects/invitations/decline/:token`**
-    *   **Success Output (200):** `{ "status": 200, "message": "Invitation declined" }`
-*   **`GET /api/projects/notifications`**
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "id", "title", "message", "isRead" } ] }`
+#### Invitations & Notifications
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/projects/invitations/mine` | None | `200` - `{ "status", "data": [ { "projectId", "role", "token" } ] }` | List my invites |
+| `POST` | `/api/projects/invitations/accept/:token` | Param: `token` | `200` - `{ "status", "data": { "projectId" }, "message" }` | Accept invite |
+| `POST` | `/api/projects/invitations/decline/:token` | Param: `token` | `200` - `{ "status", "message" }` | Decline invite |
+| `GET` | `/api/projects/notifications` | None | `200` - `{ "status", "data": [ { "id", "title", "message", "isRead" } ] }` | List notifications |
 
-**API Keys:**
-*   **`GET /api/projects/:projectId/keys`**
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "id", "createdAt", "lastUsedAt" } ] }`
-*   **`POST /api/projects/:projectId/keys`**
-    *   **Input:** None
-    *   **Success Output (201):** `{ "status": 201, "data": { "key": "rb_test_123xyz" }, "message": "Key created. Copy it now." }`
-*   **`DELETE /api/projects/:projectId/keys/:keyId`**
-    *   **Success Output (200):** `{ "status": 200, "message": "Key revoked successfully" }`
+#### API Keys
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/projects/:projectId/keys` | Param: `projectId` | `200` - `{ "status", "data": [ { "id", "createdAt", "lastUsedAt" } ] }` | List API keys |
+| `POST` | `/api/projects/:projectId/keys` | None | `201` - `{ "status", "data": { "key" }, "message" }` | Create API key |
+| `DELETE` | `/api/projects/:projectId/keys/:keyId` | Params: `projectId`, `keyId` | `200` - `{ "status", "message" }` | Revoke API key |
 
 ### 3. Database Service (`/api/query/*` & `/api/auditlog`)
-*   **`POST /api/query/execute`**
-    *   **Input Body:** `{ "projectId": "uuid", "query": "SELECT * FROM users;" }`
-    *   **Success Output (200):** `{ "status": 200, "data": { "rows": [...], "rowCount": 10, "executionTimeMs": 14 } }`
-*   **`GET /api/query/history`**
-    *   **Input Query:** `?projectId=uuid`
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "query", "executedBy", "timestamp" } ] }`
-*   **`GET /api/auditlog`**
-    *   **Input Query:** `?projectId=uuid`
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "action": "TABLE_CREATE", "details": {...} } ] }`
+
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/query/execute` | Body: `{ "projectId", "query" }` | `200` - `{ "status", "data": { "rows", "rowCount", "executionTimeMs" } }` | Execute SQL query |
+| `GET` | `/api/query/history` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ { "query", "executedBy", "timestamp" } ] }` | Query history |
+| `GET` | `/api/auditlog` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ { "action", "details" } ] }` | Audit log |
 
 ### 4. Analytics Service (`/api/analytics/*`)
-*   **`GET /api/analytics/tables`**
-    *   **Input Query:** `?projectId=uuid`
-    *   **Success Output (200):** `{ "status": 200, "data": [ "users", "orders" ] }`
-*   **`GET /api/analytics/tables/:tableName/columns`**
-    *   **Input Query:** `?projectId=uuid`
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "name": "price", "type": "numeric" } ] }`
-*   **`GET /api/analytics/chart`**
-    *   **Input Query:** `?projectId=uuid&tableName=orders&xAxis=date&yAxis=sales&aggregation=sum`
-    *   **Success Output (200):** `{ "status": 200, "data": [ { "label": "2023-01", "value": 5000 } ] }`
-*   **`GET /api/analytics/stats`**
-    *   **Input Query:** `?projectId=uuid&tableName=users`
-    *   **Success Output (200):** `{ "status": 200, "data": { "totalRecords": 1500, "recentlyAdded": 12 } }`
-*   **`GET /api/analytics/dashboard`**
-    *   **Input Query:** `?projectId=uuid`
-    *   **Success Output (200):** `{ "status": 200, "data": { "layout": [...], "widgets": [...] } }`
-*   **`POST /api/analytics/dashboard`**
-    *   **Input Body:** `{ "projectId": "...", "layout": [...], "widgets": [...] }`
-    *   **Success Output (200):** `{ "status": 200, "data": null, "message": "Dashboard saved successfully" }`
+
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/analytics/tables` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ "users", "orders" ] }` | List analytics tables |
+| `GET` | `/api/analytics/tables/:tableName/columns` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ { "name", "type" } ] }` | List columns |
+| `GET` | `/api/analytics/chart` | Query: `?projectId`, `tableName`, `xAxis`, `yAxis`, `aggregation` | `200` - `{ "status", "data": [ { "label", "value" } ] }` | Chart data |
+| `GET` | `/api/analytics/stats` | Query: `?projectId`, `tableName` | `200` - `{ "status", "data": { "totalRecords", "recentlyAdded" } }` | Table stats |
+| `GET` | `/api/analytics/dashboard` | Query: `?projectId=uuid` | `200` - `{ "status", "data": { "layout", "widgets" } }` | Get dashboard config |
+| `POST` | `/api/analytics/dashboard` | Body: `{ "projectId", "layout", "widgets" }` | `200` - `{ "status", "data": null, "message" }` | Save dashboard config |
 
 ### 5. PostgREST Auto-Generated API (`/api/rest/*`)
 Secured by passing the API Key in the `x-api-key` header. Standard PostgREST conventions apply.
 
-*   **`GET /api/rest/:tableName`**
-    *   **Input Header:** `x-api-key: rb_project_key`
-    *   **Input Query parameters (filters):** `?id=eq.5&select=id,name`
-    *   **Success Output (200):** `[ { "id": 5, "name": "Data" } ]` (Raw JSON array)
-*   **`POST /api/rest/:tableName`**
-    *   **Input Header:** `x-api-key: rb_project_key`
-    *   **Input Body:** `{ "name": "New Entry", "amount": 100 }`
-    *   **Success Output (201):** HTTP 201 Created (Optionally returns representation with `Prefer: return=representation`)
-*   **`PATCH /api/rest/:tableName`**
-    *   **Input Query:** `?id=eq.5`
-    *   **Input Body:** `{ "amount": 150 }`
-    *   **Success Output (204):** HTTP 204 No Content
-*   **`DELETE /api/rest/:tableName`**
-    *   **Input Query:** `?id=eq.5`
-    *   **Success Output (204):** HTTP 204 No Content
+| Method | Endpoint | Input | Success Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/rest/:tableName` | Header: `x-api-key`, Query: `?id=eq.5&select=id,name` | `200` - `[ { "id": 5, "name": "Data" } ]` | Read records |
+| `POST` | `/api/rest/:tableName` | Header: `x-api-key`, Body: `{ "name", ... }` | `201` Created | Create records |
+| `PATCH` | `/api/rest/:tableName` | Header: `x-api-key`, Query: `?id=eq.5`, Body: `{ ... }` | `204` No Content | Update records |
+| `DELETE` | `/api/rest/:tableName` | Header: `x-api-key`, Query: `?id=eq.5` | `204` No Content | Delete records |
 
 ## Installation & Setup
 Docker Compose orchestrates the entire application natively. 
