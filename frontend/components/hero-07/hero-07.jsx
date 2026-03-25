@@ -38,7 +38,7 @@ const Hero07 = () => {
       />
       <div className="relative z-10 text-center max-w-2xl">
         <Badge className="bg-primary text-primary-foreground rounded-full py-1 px-3 border-none shadow-sm hover:bg-primary/90 transition-colors">
-          Self-hosted BaaS Platform
+          The Open-Source Backend for Rapid Development
         </Badge>
 
         <h1 className="mt-6 text-4xl sm:text-5xl md:text-6xl font-bold !leading-[1.2] tracking-tight text-foreground">

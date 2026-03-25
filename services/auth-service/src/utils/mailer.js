@@ -64,7 +64,7 @@ async function sendOtpEmail(to, otp, name = 'there') {
             <tr>
               <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:32px;text-align:center;">
                 <div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:-0.5px;">⚡ RapidBase</div>
-                <div style="color:rgba(255,255,255,0.8);font-size:14px;margin-top:4px;">Backend-as-a-Service</div>
+                <div style="color:rgba(255,255,255,0.8);font-size:14px;margin-top:4px;">The Open-Source Backend for Rapid Development</div>
               </td>
             </tr>
             <!-- Body -->
@@ -87,7 +87,7 @@ async function sendOtpEmail(to, otp, name = 'there') {
             <!-- Footer -->
             <tr>
               <td style="background:#0a0a0f;padding:20px 32px;text-align:center;border-top:1px solid #1e1e2e;">
-                <p style="color:#475569;font-size:12px;margin:0;">© 2025 RapidBase • Open-source BaaS platform</p>
+                <p style="color:#475569;font-size:12px;margin:0;">© 2025 RapidBase • The Open-Source Backend for Rapid Development</p>
               </td>
             </tr>
           </table>

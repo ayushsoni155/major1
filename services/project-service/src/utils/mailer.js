@@ -38,13 +38,13 @@ const baseTemplate = (body) => `
         <tr>
           <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:28px 32px;text-align:center;">
             <div style="font-size:24px;font-weight:800;color:#fff;letter-spacing:-0.5px;">⚡ RapidBase</div>
-            <div style="color:rgba(255,255,255,0.75);font-size:13px;margin-top:4px;">Backend-as-a-Service</div>
+            <div style="color:rgba(255,255,255,0.75);font-size:13px;margin-top:4px;">The Open-Source Backend for Rapid Development</div>
           </td>
         </tr>
         <tr><td style="padding:36px 32px;">${body}</td></tr>
         <tr>
           <td style="background:#0a0a0f;padding:18px 32px;text-align:center;border-top:1px solid #1e1e2e;">
-            <p style="color:#475569;font-size:12px;margin:0;">© 2025 RapidBase • Open-source BaaS platform</p>
+            <p style="color:#475569;font-size:12px;margin:0;">© 2025 RapidBase • The Open-Source Backend for Rapid Development</p>
           </td>
         </tr>
       </table>

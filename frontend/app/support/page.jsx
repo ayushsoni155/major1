@@ -13,7 +13,7 @@ const FAQS = [
   {
     category: "Getting Started",
     items: [
-      { q: "What is RapidBase?", a: "RapidBase is a Backend-as-a-Service (BaaS) platform that gives you an instant Postgres database per project, a REST API powered by PostgREST, a SQL editor, analytics, and team collaboration features — all in one dashboard." },
+      { q: "What is RapidBase?", a: "RapidBase is the open-source backend for rapid development that gives you an instant Postgres database per project, a REST API powered by PostgREST, a SQL editor, analytics, and team collaboration features — all in one dashboard." },
       { q: "How do I create my first project?", a: "From the dashboard, click 'New Project', enter a name and optional description, and click 'Create'. Your project gets a dedicated Postgres schema, isolated from all other projects." },
       { q: "What are the role types (admin, editor, viewer)?", a: "Admin: full access including member management and project settings. Editor: can create/edit tables and data, run SQL. Viewer: read-only access to tables, analytics, and schema." },
     ],
