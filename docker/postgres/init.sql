@@ -181,7 +181,7 @@ BEGIN
         CREATE ROLE web_anon NOLOGIN;
     END IF;
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticator') THEN
-        CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD 'rapidbase_secret_2024';
+        CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD 'rb_db_v9xK2mP7qL4wN1jR8tF5cH3bZ6';
     END IF;
 END
 $$;

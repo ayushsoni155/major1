@@ -51,31 +51,125 @@ graph TD
 ### ER Diagram (Core Entities)
 ```mermaid
 erDiagram
-    USERS ||--o{ PROJECTS : owns
-    PROJECTS ||--o{ SCHEMAS : contains
-    SCHEMAS ||--o{ TABLES : defines
-    PROJECTS ||--o{ API_KEYS : has
-    PROJECTS ||--o{ MEMBERS : has
+    users ||--o{ projects : "owns"
+    users ||--o{ project_members : "belongs to"
+    users ||--o{ api_keys : "creates"
+    users ||--o{ query_history : "executes"
+    users ||--o{ audit_log : "performs"
+    users ||--o{ notifications : "receives"
+    users ||--o{ project_invitations : "invites"
+    users ||--o{ project_invitations : "is invited"
     
-    USERS {
+    projects ||--o{ project_members : "has"
+    projects ||--o{ api_keys : "has"
+    projects ||--o{ query_history : "logs"
+    projects ||--o{ audit_log : "tracks"
+    projects ||--o{ project_invitations : "has"
+    projects ||--|| analytics_dashboards : "has"
+
+    users {
         uuid id PK
-        string email
+        varchar email "UNIQUE"
+        varchar password_hash
+        varchar name
+        text avatar_url
+        varchar role
+        boolean is_verified
+        varchar otp_code
+        timestamptz otp_expires_at
+        integer otp_attempts
+        boolean is_active
+        timestamptz last_login
+        timestamptz created_at
+        timestamptz updated_at
     }
-    PROJECTS {
-        uuid id PK
+
+    projects {
+        uuid project_id PK
         uuid owner_id FK
-        string name
+        varchar project_name
+        text project_description
+        varchar schema_name "UNIQUE"
+        varchar project_status
+        timestamptz created_at
+        timestamptz updated_at
     }
-    API_KEYS {
-        uuid id PK
-        uuid project_id FK
-        string key_hash
-    }
-    MEMBERS {
+
+    project_members {
         uuid id PK
         uuid project_id FK
         uuid user_id FK
-        string role
+        varchar role
+        timestamptz invited_at
+    }
+
+    api_keys {
+        uuid id PK
+        uuid project_id FK
+        varchar key_name
+        varchar api_key "UNIQUE"
+        varchar key_prefix
+        text origin_url
+        jsonb permissions
+        boolean is_active
+        timestamptz last_used_at
+        uuid created_by FK
+        timestamptz created_at
+        timestamptz expires_at
+    }
+
+    query_history {
+        uuid id PK
+        uuid project_id FK
+        uuid user_id FK
+        text query_text
+        varchar query_status
+        integer execution_time_ms
+        integer rows_affected
+        text error_message
+        timestamptz created_at
+    }
+
+    audit_log {
+        uuid id PK
+        uuid project_id FK
+        uuid actor_id FK
+        varchar action_type
+        jsonb details
+        varchar ip_address
+        timestamptz created_at
+    }
+
+    notifications {
+        uuid id PK
+        uuid user_id FK
+        varchar type
+        varchar title
+        text message
+        jsonb data
+        boolean is_read
+        timestamptz created_at
+    }
+
+    project_invitations {
+        uuid id PK
+        uuid project_id FK
+        uuid inviter_id FK
+        varchar invitee_email
+        uuid invitee_id FK
+        varchar role
+        varchar token "UNIQUE"
+        varchar status
+        timestamptz created_at
+        timestamptz expires_at
+    }
+
+    analytics_dashboards {
+        uuid id PK
+        uuid project_id FK
+        jsonb layout
+        jsonb widgets
+        timestamptz updated_at
     }
 ```
 
@@ -267,5 +361,5 @@ cp .env.example .env
 docker-compose up --build -d
 ```
 All images (PostgreSQL, Redis, Services, Gateway, Next.js) will build securely.
-- **Frontend Panel**: Available at `http://localhost:3000`
+- **Frontend Panel**: Available at `http://localhost/`
 - **Backend APIs:** Secured heavily under `http://localhost/api/*` via Nginx Gateway boundaries.
