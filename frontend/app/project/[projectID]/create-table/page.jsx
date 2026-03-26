@@ -19,6 +19,12 @@ import { Plus, Trash2, Loader2, Table as TableIcon, Columns, Sparkles, Settings2
 import { useTables } from "@/providers/TableContext";
 import { motion, AnimatePresence } from "motion/react";
 
+const generateId = () => {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).substring(2);
+};
+
 const DATA_TYPES = [
   { value: "UUID", description: "Unique identifier." },
   { value: "VARCHAR(255)", description: "Short text up to 255 chars." },
@@ -49,7 +55,7 @@ export default function CreateTablePage() {
   const [loading, setLoading] = useState(false);
   const [columns, setColumns] = useState([
     {
-      id: crypto.randomUUID(),
+      id: generateId(),
       name: "",
       dataType: "VARCHAR(255)",
       baseType: "",
@@ -84,7 +90,7 @@ export default function CreateTablePage() {
     setColumns([
       ...columns,
       {
-        id: crypto.randomUUID(),
+        id: generateId(),
         name: "",
         dataType: "VARCHAR(255)",
         baseType: "",
@@ -136,7 +142,7 @@ export default function CreateTablePage() {
       setTableName("");
       setColumns([
         {
-          id: crypto.randomUUID(),
+          id: generateId(),
           name: "",
           dataType: "VARCHAR(255)",
           baseType: "",

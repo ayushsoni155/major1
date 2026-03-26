@@ -33,6 +33,21 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
 };
 
+const generateUUID = () => {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0,
+            v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+};
+
+const isValidUUID = (str) => {
+  if (!str) return true; // allow empty to be handled by null logic
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+};
+
 // Determine input type for a column
 function getInputType(dataType) {
   if (!dataType) return "text";
@@ -167,9 +182,8 @@ export default function TableDataGridPage() {
       // Strip empty-string values for UUID and numeric columns so DB uses defaults
       const cleanRow = {};
       Object.entries(formData).forEach(([key, val]) => {
+        const col = tableDetails?.columns?.find(c => c.column_name === key);
         if (val === "" || val === null || val === undefined) {
-          // Find the column definition
-          const col = tableDetails?.columns?.find(c => c.column_name === key);
           const t = col?.data_type?.toLowerCase() || "";
           const isUUID = t === "uuid";
           const isNum = ["integer","bigint","smallint","numeric","decimal"].includes(t);
@@ -179,6 +193,9 @@ export default function TableDataGridPage() {
           // If NOT NULL and no default, still include as "" so backend validation can report clearly
           else { cleanRow[key] = val; }
         } else {
+          if (col?.data_type?.toLowerCase() === "uuid" && !isValidUUID(val)) {
+            throw new Error(`Invalid UUID format for column "${key}"`);
+          }
           cleanRow[key] = val;
         }
       });
@@ -187,7 +204,7 @@ export default function TableDataGridPage() {
       setInsertOpen(false);
       fetchTableData();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to insert row");
+      toast.error(err.message || err.response?.data?.message || "Failed to insert row");
     } finally { setSubmitting(false); }
   };
 
@@ -199,6 +216,15 @@ export default function TableDataGridPage() {
       const updates = Object.fromEntries(
         Object.entries(formData).filter(([k]) => k !== pk)
       );
+      
+      // Validate UUIDs
+      Object.entries(updates).forEach(([key, val]) => {
+        const col = tableDetails?.columns?.find(c => c.column_name === key);
+        if (col?.data_type?.toLowerCase() === "uuid" && val && !isValidUUID(val)) {
+          throw new Error(`Invalid UUID format for column "${key}"`);
+        }
+      });
+
       await api.patch(`/projects/${projectID}/tables/${tableName}/rows`, {
         primaryKey: pk,
         primaryValue: pkVal,
@@ -208,7 +234,7 @@ export default function TableDataGridPage() {
       setEditOpen(false);
       fetchTableData();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to update row");
+      toast.error(err.message || err.response?.data?.message || "Failed to update row");
     } finally { setSubmitting(false); }
   };
 
@@ -259,18 +285,32 @@ export default function TableDataGridPage() {
             <span className="text-sm text-zinc-400">{formData[col.column_name] ? "true" : "false"}</span>
           </div>
         ) : (
-          <Input
-            type={inputType}
-            value={formData[col.column_name] ?? ""}
-            onChange={e => !readOnly && setFormData(prev => ({ ...prev, [col.column_name]: e.target.value }))}
-            placeholder={readOnly ? "(auto-generated)" : `Enter ${col.column_name}...`}
-            readOnly={readOnly}
-            className={`rounded-xl h-10 text-sm font-mono ${
-              readOnly
-                ? "bg-white/[0.02] border-white/5 text-zinc-600 cursor-not-allowed"
-                : "bg-white/5 border-white/10 text-white focus-visible:ring-violet-500/50"
-            }`}
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              type={inputType}
+              value={formData[col.column_name] ?? ""}
+              onChange={e => !readOnly && setFormData(prev => ({ ...prev, [col.column_name]: e.target.value }))}
+              placeholder={readOnly ? "(auto-generated)" : `Enter ${col.column_name}...`}
+              readOnly={readOnly}
+              className={`rounded-xl h-10 text-sm font-mono flex-1 ${
+                readOnly
+                  ? "bg-white/[0.02] border-white/5 text-zinc-600 cursor-not-allowed"
+                  : "bg-white/5 border-white/10 text-white focus-visible:ring-violet-500/50"
+              }`}
+            />
+            {col.data_type?.toLowerCase() === "uuid" && !readOnly && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setFormData(prev => ({ ...prev, [col.column_name]: generateUUID() }))}
+                className="shrink-0 h-10 w-10 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/20 rounded-xl"
+                title="Generate Random UUID"
+              >
+                <Key className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         )}
       </div>
     );
