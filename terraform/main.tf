@@ -1,7 +1,7 @@
 #keys
-resource "aws_key_pair" "ec2-key" {
+resource "aws_key_pair" "rapidbase_ssh_key" {
   key_name   = "rapidbase_ssh_key"
-  public_key = file("rapidbase_ssh_key.pub")
+  public_key = file("../rapidbase_ssh_key.pub")
   tags = {
     Name = "rapidbase_ssh_key"
   }
@@ -37,7 +37,7 @@ resource "aws_security_group" "rapidbase_sg" {
     description = "open all inbounds"
   }
   tags = {
-    Name = "${var.env}-ec2"
+    Name = "rapidbase_sg"
   }
 }
 

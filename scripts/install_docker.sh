@@ -21,7 +21,7 @@ EOF
 sudo apt update
 
 # Install Docker
-sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin-y
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
 
 # Start and enable Docker
 sudo systemctl start docker
@@ -30,6 +30,7 @@ sudo systemctl enable docker
 # Add ubuntu user to the docker group
 sudo usermod -aG docker ubuntu
 
+# Verify Docker installation
 echo "Installation complete!"
 docker --version
 newgrp docker
