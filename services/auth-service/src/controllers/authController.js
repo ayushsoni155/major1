@@ -5,12 +5,11 @@ const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = requir
 const { sendOtpEmail } = require('../utils/mailer');
 
 // ---- Cookie config ----
-// We relax secure and sameSite if frontend is on localhost, avoiding dropped session cookies during dev
-const isLocal = process.env.FRONTEND_URL?.includes('localhost') || !process.env.FRONTEND_URL;
+const isHttps = process.env.FRONTEND_URL?.startsWith('https://');
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production' && !isLocal,
-  sameSite: (process.env.NODE_ENV === 'production' && !isLocal) ? 'strict' : 'lax',
+  secure: isHttps ? true : false,
+  sameSite: 'lax',
   path: '/',
 };
 const ACCESS_COOKIE_MAX_AGE  = 15 * 60 * 1000;        // 15 minutes
