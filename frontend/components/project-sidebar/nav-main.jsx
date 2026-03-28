@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import {
   ChevronRight, BarChart3, Table, FileCode2, Shield,
   ClipboardList, Plus, Workflow, Loader2, MoreHorizontal,
-  Trash2, LayoutDashboard, Key,
+  Trash2, LayoutDashboard, Key, BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
@@ -36,6 +36,7 @@ const navMain = [
   { title: "Analytics",            icon: BarChart3,        routeSuffix: "analytics" },
   { title: "Schema Visualization", icon: Workflow,         routeSuffix: "schema-visualization" },
   { title: "API Keys",             icon: Key,              routeSuffix: "api-keys" },
+  { title: "API Docs",              icon: BookOpen,         routeSuffix: "api-docs" },
   { title: "Audit Logs",           icon: ClipboardList,    routeSuffix: "audit-log" },
 ];
 

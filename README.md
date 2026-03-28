@@ -266,14 +266,131 @@ Handles workspaces, schemas, table configuration, RBAC members, and keys. Requir
 | `POST` | `/api/analytics/dashboard` | Body: `{ "projectId", "layout", "widgets" }` | `200` - `{ "status", "data": null, "message" }` | Save dashboard config |
 
 ### 5. PostgREST Auto-Generated API (`/api/rest/*`)
-Secured by passing the API Key in the `x-api-key` header. Standard PostgREST conventions apply.
 
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/rest/:tableName` | Header: `x-api-key`, Query: `?id=eq.5&select=id,name` | `200` - `[ { "id": 5, "name": "Data" } ]` | Read records |
-| `POST` | `/api/rest/:tableName` | Header: `x-api-key`, Body: `{ "name", ... }` | `201` Created | Create records |
-| `PATCH` | `/api/rest/:tableName` | Header: `x-api-key`, Query: `?id=eq.5`, Body: `{ ... }` | `204` No Content | Update records |
-| `DELETE` | `/api/rest/:tableName` | Header: `x-api-key`, Query: `?id=eq.5` | `204` No Content | Delete records |
+The PostgREST API gives you instant, high-performance REST access to your project tables. Every request is authenticated via an API key — no cookies or JWT tokens needed.
+
+#### Authentication
+
+Include your API key in every request:
+```bash
+curl -H "x-api-key: YOUR_API_KEY" http://YOUR_DOMAIN/api/rest/your_table
+```
+
+Generate API keys from: **Dashboard → API Keys → Generate New Key**
+
+#### Read Records
+
+```bash
+# Get all rows
+curl http://YOUR_DOMAIN/api/rest/users -H "x-api-key: YOUR_KEY"
+
+# Select specific columns
+curl "http://YOUR_DOMAIN/api/rest/users?select=id,email" -H "x-api-key: YOUR_KEY"
+
+# Filter: exact match
+curl "http://YOUR_DOMAIN/api/rest/users?id=eq.5" -H "x-api-key: YOUR_KEY"
+
+# Filter: greater than
+curl "http://YOUR_DOMAIN/api/rest/users?age=gt.18" -H "x-api-key: YOUR_KEY"
+
+# Filter: pattern match (case-insensitive)
+curl "http://YOUR_DOMAIN/api/rest/users?name=ilike.*john*" -H "x-api-key: YOUR_KEY"
+
+# Sort + Pagination
+curl "http://YOUR_DOMAIN/api/rest/users?order=created_at.desc&limit=10&offset=0" -H "x-api-key: YOUR_KEY"
+```
+
+#### Insert Records
+
+```bash
+# Single row
+curl -X POST http://YOUR_DOMAIN/api/rest/users \
+  -H "x-api-key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=representation" \
+  -d '{"full_name": "John Doe", "email": "john@example.com"}'
+
+# Multiple rows
+curl -X POST http://YOUR_DOMAIN/api/rest/users \
+  -H "x-api-key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[{"full_name": "Alice"}, {"full_name": "Bob"}]'
+```
+
+#### Update Records
+
+```bash
+curl -X PATCH "http://YOUR_DOMAIN/api/rest/users?id=eq.1" \
+  -H "x-api-key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"full_name": "Updated Name"}'
+```
+
+> ⚠️ Always include a filter (`?id=eq.X`), otherwise ALL rows will be updated.
+
+#### Delete Records
+
+```bash
+curl -X DELETE "http://YOUR_DOMAIN/api/rest/users?id=eq.1" \
+  -H "x-api-key: YOUR_KEY"
+```
+
+> ⚠️ Always include a filter, otherwise ALL rows will be deleted.
+
+#### JavaScript Example
+
+```javascript
+const API_URL = "http://YOUR_DOMAIN/api/rest";
+const headers = {
+  "x-api-key": "YOUR_KEY",
+  "Content-Type": "application/json",
+  "Prefer": "return=representation",
+};
+
+// Read
+const users = await fetch(`${API_URL}/users`, { headers }).then(r => r.json());
+
+// Insert
+const newUser = await fetch(`${API_URL}/users`, {
+  method: "POST", headers,
+  body: JSON.stringify({ full_name: "New User", email: "new@test.com" }),
+}).then(r => r.json());
+
+// Update
+await fetch(`${API_URL}/users?id=eq.${newUser[0].id}`, {
+  method: "PATCH", headers,
+  body: JSON.stringify({ full_name: "Updated" }),
+});
+
+// Delete
+await fetch(`${API_URL}/users?id=eq.${newUser[0].id}`, {
+  method: "DELETE", headers,
+});
+```
+
+#### Filter Operators Reference
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `eq` | Equals | `?id=eq.5` |
+| `neq` | Not equal | `?status=neq.deleted` |
+| `gt` / `lt` | Greater / Less than | `?age=gt.18` |
+| `gte` / `lte` | Greater/Less or equal | `?price=lte.100` |
+| `like` | Pattern match (case-sensitive) | `?name=like.*john*` |
+| `ilike` | Pattern match (case-insensitive) | `?name=ilike.*john*` |
+| `in` | In list | `?status=in.(active,pending)` |
+| `is` | IS (null/true/false) | `?deleted_at=is.null` |
+
+#### Response Codes
+
+| Code | Meaning |
+|------|---------|
+| `200` | Success (GET, PATCH) |
+| `201` | Created (POST with `Prefer: return=representation`) |
+| `204` | Success, no content returned |
+| `401` | Invalid or missing API key |
+| `404` | Table not found |
+| `409` | Unique constraint violation |
 
 ## Installation & Setup
 Docker Compose orchestrates the entire application natively. 

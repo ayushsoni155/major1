@@ -18,6 +18,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
+// IMPORTANT: validate-api-key must be registered BEFORE any router that uses
+// protect middleware, because those routers reject unauthenticated requests.
+const { validateApiKey } = require('./src/controllers/projectController');
+app.get('/projects/validate-api-key', validateApiKey);
+
 // IMPORTANT: Static-prefix routes (notifications, invitations) MUST be registered
 // BEFORE projectRoutes which has a /:projectId wildcard. If projectRoutes is first,
 // GET /projects/notifications is treated as /:projectId="notifications" → UUID parse error.

@@ -73,6 +73,12 @@ const createTable = async (req, res, next) => {
     if (fkSql) sql += `, ${fkSql}`;
     sql += ');';
     await client.query(sql);
+    // Grant web_anon (PostgREST role) CRUD access so API key holders can query this table
+    await client.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON "${schema_name}"."${tableName}" TO web_anon;`);
+    // Grant sequence access for auto-increment columns
+    await client.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA "${schema_name}" TO web_anon;`);
+    // Reload PostgREST schema cache so the new table is immediately available
+    await client.query(`NOTIFY pgrst, 'reload schema';`);
     await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.TABLE_CREATED, details: { tableName, schema_name }, ipAddress: req.ip });
     await client.query('COMMIT');
     res.status(201).json({ status: 201, data: { tableName }, message: 'Table created successfully.' });

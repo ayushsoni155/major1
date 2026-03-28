@@ -41,6 +41,8 @@ const createProject = async (req, res, next) => {
     // reload its schema cache so the new schema is immediately available.
     await client.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO web_anon;`);
     await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA "${schemaName}" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO web_anon;`);
+    await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA "${schemaName}" GRANT USAGE, SELECT ON SEQUENCES TO web_anon;`);
+    await client.query(`NOTIFY pgrst, 'reload config';`);
     await client.query(`NOTIFY pgrst, 'reload schema';`);
     await client.query('COMMIT');
     await logAction({ projectId: project.project_id, actorId: ownerId, actionType: ACTION_TYPES.PROJECT_CREATED, details: { project_name: name, schemaName }, ipAddress: req.ip });

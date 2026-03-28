@@ -191,6 +191,90 @@ GRANT USAGE ON SCHEMA public TO web_anon;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO web_anon;
 
 -- ============================================
+-- PostgREST Dynamic Schema Configuration
+-- ============================================
+-- Creates a pre_config function that PostgREST calls at startup
+-- and on every config reload. It dynamically builds the schema
+-- list from all project schemas so API key holders can query them.
+-- ============================================
+CREATE SCHEMA IF NOT EXISTS postgrest;
+
+CREATE OR REPLACE FUNCTION postgrest.pre_config()
+RETURNS void AS $$
+DECLARE
+    schemas text;
+BEGIN
+    -- Build comma-separated list: "public,proj_abc123,proj_def456,..."
+    SELECT string_agg(schema_name, ',')
+    INTO schemas
+    FROM projects;
+
+    IF schemas IS NOT NULL AND schemas != '' THEN
+        PERFORM set_config('pgrst.db_schemas', 'public,' || schemas, true);
+    ELSE
+        PERFORM set_config('pgrst.db_schemas', 'public', true);
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+GRANT USAGE ON SCHEMA postgrest TO authenticator;
+GRANT EXECUTE ON FUNCTION postgrest.pre_config() TO authenticator;
+
+-- ============================================
+-- Migration: Grant web_anon on ALL existing project schemas
+-- ============================================
+-- Run this once to fix existing schemas that were created
+-- before the web_anon grants were added to createProject.
+-- ============================================
+CREATE OR REPLACE FUNCTION grant_web_anon_on_all_project_schemas()
+RETURNS void AS $$
+DECLARE
+    s text;
+BEGIN
+    FOR s IN SELECT schema_name FROM projects
+    LOOP
+        EXECUTE format('GRANT USAGE ON SCHEMA %I TO web_anon', s);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO web_anon', s);
+        EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %I TO web_anon', s);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO web_anon', s);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT USAGE, SELECT ON SEQUENCES TO web_anon', s);
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Execute once during bootstrap
+SELECT grant_web_anon_on_all_project_schemas();
+
+-- ============================================
+-- Event Trigger: auto-grant web_anon on new tables
+-- ============================================
+-- When any CREATE TABLE runs in a project schema,
+-- automatically grant web_anon CRUD on it.
+-- ============================================
+CREATE OR REPLACE FUNCTION auto_grant_web_anon_on_new_table()
+RETURNS event_trigger AS $$
+DECLARE
+    obj record;
+BEGIN
+    FOR obj IN SELECT * FROM pg_event_trigger_ddl_commands()
+                WHERE command_tag = 'CREATE TABLE'
+    LOOP
+        -- Only grant on project schemas (they exist in the projects table)
+        IF EXISTS (SELECT 1 FROM projects WHERE schema_name = obj.schema_name) THEN
+            EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %s TO web_anon', obj.object_identity);
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Drop + recreate to avoid "already exists" on re-init
+DROP EVENT TRIGGER IF EXISTS auto_grant_web_anon;
+CREATE EVENT TRIGGER auto_grant_web_anon
+    ON ddl_command_end
+    WHEN TAG IN ('CREATE TABLE')
+    EXECUTE FUNCTION auto_grant_web_anon_on_new_table();
+
+-- ============================================
 -- Triggers: auto-update updated_at
 -- ============================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
