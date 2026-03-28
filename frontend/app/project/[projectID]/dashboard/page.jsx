@@ -55,7 +55,7 @@ export default function DashboardPage() {
   const apiBase = (typeof window !== "undefined"
     ? window.location.origin
     : process.env.NEXT_PUBLIC_API_URL || "https://your-domain.com");
-  const restEndpoint = `${apiBase}/rest/v1`;
+  const restEndpoint = `${apiBase}/api/rest`;
 
   const statCards = [
     { title: "Tables", value: tables.length, icon: TableIcon, color: "text-violet-400", bg: "bg-violet-500/10", border: "border-violet-500/20", href: `create-table` },
