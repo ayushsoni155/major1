@@ -16,7 +16,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,7 +37,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -98,7 +98,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:4001/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4001/health || exit 1" ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -136,7 +136,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:4002/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4002/health || exit 1" ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -168,7 +168,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:4003/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4003/health || exit 1" ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -199,7 +199,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:4004/health || exit 1"]
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4004/health || exit 1" ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -231,6 +231,44 @@ services:
       - rapidbase-network
 
   # ============================================
+  # Redis Insight — UI for Redis
+  # ============================================
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: rapidbase-redis-insight
+    restart: unless-stopped
+    ports:
+      - "8001:5540"
+    volumes:
+      - redisinsight_data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
+  # pgAdmin — UI for PostgreSQL
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: rapidbase-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rapidbase-network
+
+  # ============================================
   # Nginx API Gateway — Port 80
   # ============================================
   nginx-gateway:
@@ -255,6 +293,10 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  redisinsight_data:
+    driver: local
+  pgadmin_data:
     driver: local
 
 networks:

@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const db = require('../config/db');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
-const { sendOtpEmail } = require('../utils/mailer');
+const { sendOtpEmail, sendPasswordResetEmail } = require('../utils/mailer');
 
 // ---- Cookie config ----
 const isHttps = process.env.FRONTEND_URL?.startsWith('https://');
@@ -400,6 +400,138 @@ const getMe = async (req, res) => {
 };
 
 // ============================================================
+// FORGOT PASSWORD — sends OTP email for password reset
+// ============================================================
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ status: 400, data: null, message: 'Email is required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = await db.query(
+      'SELECT id, name, is_verified, is_active, otp_expires_at FROM users WHERE email = $1',
+      [normalizedEmail]
+    );
+
+    // Always return success to prevent email enumeration
+    if (result.rows.length === 0) {
+      return res.status(200).json({ status: 200, data: { email: normalizedEmail }, message: 'If an account exists with this email, a reset code has been sent.' });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.is_active) {
+      return res.status(200).json({ status: 200, data: { email: normalizedEmail }, message: 'If an account exists with this email, a reset code has been sent.' });
+    }
+
+    if (!user.is_verified) {
+      return res.status(400).json({ status: 400, data: { email: normalizedEmail, requiresVerification: true }, message: 'Please verify your email first before resetting password.' });
+    }
+
+    // Cooldown: prevent spamming (must wait 60s)
+    if (user.otp_expires_at) {
+      const createdAt = new Date(user.otp_expires_at).getTime() - 10 * 60 * 1000;
+      const cooldownEnd = createdAt + 60 * 1000;
+      if (Date.now() < cooldownEnd) {
+        const waitSec = Math.ceil((cooldownEnd - Date.now()) / 1000);
+        return res.status(429).json({
+          status: 429, data: null,
+          message: `Please wait ${waitSec} seconds before requesting a new code`,
+        });
+      }
+    }
+
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await db.query(
+      'UPDATE users SET otp_code=$1, otp_expires_at=$2, otp_attempts=0 WHERE id=$3',
+      [otp, otpExpiry, user.id]
+    );
+    await sendPasswordResetEmail(normalizedEmail, otp, user.name || 'there');
+
+    return res.status(200).json({ status: 200, data: { email: normalizedEmail }, message: 'If an account exists with this email, a reset code has been sent.' });
+  } catch (error) {
+    console.error('[Auth] ForgotPassword error:', error);
+    res.status(500).json({ status: 500, data: null, message: 'Internal server error' });
+  }
+};
+
+// ============================================================
+// RESET PASSWORD — verifies OTP and sets new password
+// ============================================================
+const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ status: 400, data: null, message: 'Email, OTP, and new password are required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ status: 400, data: null, message: 'New password must be at least 8 characters' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = await db.query(
+      'SELECT id, otp_code, otp_expires_at, otp_attempts, is_active, is_verified FROM users WHERE email = $1',
+      [normalizedEmail]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 404, data: null, message: 'User not found' });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.is_active || !user.is_verified) {
+      return res.status(400).json({ status: 400, data: null, message: 'Account is not active or not verified' });
+    }
+
+    // Rate-limit OTP attempts
+    if (user.otp_attempts >= 5) {
+      return res.status(429).json({ status: 429, data: null, message: 'Too many attempts. Please request a new code.' });
+    }
+
+    // Check expiry
+    if (!user.otp_expires_at || new Date() > new Date(user.otp_expires_at)) {
+      return res.status(400).json({ status: 400, data: null, message: 'Reset code has expired. Please request a new one.' });
+    }
+
+    // Increment attempt counter
+    await db.query('UPDATE users SET otp_attempts = otp_attempts + 1 WHERE id = $1', [user.id]);
+
+    // Constant-time comparison
+    const providedOtp = String(otp).trim();
+    const storedOtp   = String(user.otp_code).trim();
+    const match = crypto.timingSafeEqual(
+      Buffer.from(providedOtp.padEnd(6, ' ')),
+      Buffer.from(storedOtp.padEnd(6, ' '))
+    );
+
+    if (!match) {
+      return res.status(400).json({ status: 400, data: null, message: 'Invalid reset code' });
+    }
+
+    // Hash new password and update
+    const salt = await bcrypt.genSalt(12);
+    const password_hash = await bcrypt.hash(newPassword, salt);
+
+    await db.query(
+      `UPDATE users SET password_hash=$1, otp_code=NULL, otp_expires_at=NULL, otp_attempts=0, updated_at=NOW()
+       WHERE id=$2`,
+      [password_hash, user.id]
+    );
+
+    return res.status(200).json({ status: 200, data: null, message: 'Password reset successfully. You can now log in with your new password.' });
+  } catch (error) {
+    console.error('[Auth] ResetPassword error:', error);
+    res.status(500).json({ status: 500, data: null, message: 'Internal server error' });
+  }
+};
+
+// ============================================================
 // REFRESH TOKEN — rotates tokens via cookie
 // ============================================================
 const refreshToken = async (req, res) => {
@@ -438,4 +570,4 @@ const refreshToken = async (req, res) => {
   }
 };
 
-module.exports = { register, verifyOtp, resendOtp, login, logout, getMe, refreshToken, updateProfile, changePassword, deleteAccount };
+module.exports = { register, verifyOtp, resendOtp, login, logout, getMe, refreshToken, updateProfile, changePassword, deleteAccount, forgotPassword, resetPassword };

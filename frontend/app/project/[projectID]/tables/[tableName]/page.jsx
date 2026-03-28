@@ -18,7 +18,8 @@ import {
 import {
   Loader2, Database, Key, List, Server,
   ChevronLeft, ChevronRight, Hash, Type, Link2, Search,
-  Plus, Edit2, Trash2, ListOrdered, RefreshCw, Download, X
+  Plus, Edit2, Trash2, ListOrdered, RefreshCw, Download, X,
+  ArrowUpDown, ArrowUp, ArrowDown
 } from "lucide-react";
 import api from "@/utils/axios";
 import { motion, AnimatePresence } from "motion/react";
@@ -96,6 +97,8 @@ export default function TableDataGridPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
   const limit = 50;
 
   // Modal state
@@ -136,9 +139,15 @@ export default function TableDataGridPage() {
     if (!projectID || !tableName) return;
     setLoading(true);
     try {
+      const params = { page, limit };
+      if (search) params.search = search;
+      if (sortBy) {
+        params.sortBy = sortBy;
+        params.sortOrder = sortOrder || "asc";
+      }
       const [detailsRes, dataRes] = await Promise.all([
         api.get(`/projects/${projectID}/tables/${tableName}`),
-        api.get(`/projects/${projectID}/tables/${tableName}/data`, { params: { page, limit } }),
+        api.get(`/projects/${projectID}/tables/${tableName}/data`, { params }),
       ]);
       setTableDetails(detailsRes.data?.data || null);
       setTableData(dataRes.data?.data?.rows || []);
@@ -148,7 +157,7 @@ export default function TableDataGridPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectID, tableName, page]);
+  }, [projectID, tableName, page, search, sortBy, sortOrder]);
 
   useEffect(() => { fetchTableData(); }, [fetchTableData]);
 
@@ -351,7 +360,7 @@ export default function TableDataGridPage() {
               className="pl-9 pr-9 bg-black/40 border-white/10 text-white rounded-xl h-10 focus-visible:ring-blue-500/50 text-sm"
             />
             {searchInput && (
-              <button onClick={() => { setSearchInput(""); setSearch(""); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300">
+              <button onClick={() => { setSearchInput(""); setSearch(""); setPage(1); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -413,13 +422,39 @@ export default function TableDataGridPage() {
                     {allColumns.map((col) => {
                       const isFk = tableDetails.foreignKeys?.some(fk => fk.column_name === col.column_name);
                       const isPk = col.column_name.toLowerCase() === "id" || col.is_primary_key;
+                      const isActiveSortCol = sortBy === col.column_name;
+                      const handleSort = () => {
+                        if (!isActiveSortCol) {
+                          setSortBy(col.column_name);
+                          setSortOrder("asc");
+                        } else if (sortOrder === "asc") {
+                          setSortOrder("desc");
+                        } else {
+                          setSortBy("");
+                          setSortOrder("");
+                        }
+                        setPage(1);
+                      };
                       return (
-                        <TableHead key={col.column_name} className="bg-[#12121a] px-4 py-3 whitespace-nowrap border-r border-white/5 last:border-r-0">
+                        <TableHead
+                          key={col.column_name}
+                          className="bg-[#12121a] px-4 py-3 whitespace-nowrap border-r border-white/5 last:border-r-0 cursor-pointer select-none hover:bg-white/[0.04] transition-colors"
+                          onClick={handleSort}
+                        >
                           <div className="flex items-center gap-1.5">
                             {getColumnIcon(col.column_name, col.data_type, isFk)}
                             <span className="text-zinc-300 font-semibold text-xs tracking-wider">{col.column_name}</span>
                             {isPk && <span className="text-[10px] font-bold text-amber-500/70 bg-amber-500/10 px-1 py-0.5 rounded ml-1">PK</span>}
                             {isFk && <span className="text-[10px] font-bold text-blue-500/70 bg-blue-500/10 px-1 py-0.5 rounded ml-1">FK</span>}
+                            <span className="ml-auto pl-1">
+                              {isActiveSortCol && sortOrder === "asc" ? (
+                                <ArrowUp className="w-3 h-3 text-violet-400" />
+                              ) : isActiveSortCol && sortOrder === "desc" ? (
+                                <ArrowDown className="w-3 h-3 text-violet-400" />
+                              ) : (
+                                <ArrowUpDown className="w-3 h-3 text-zinc-600" />
+                              )}
+                            </span>
                           </div>
                           <div className="text-[10px] text-zinc-600 font-mono mt-0.5 tracking-wider uppercase">
                             {col.data_type}{col.is_nullable === "NO" ? " · NOT NULL" : ""}

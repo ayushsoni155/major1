@@ -127,7 +127,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Password</Label>
-                <Link href="#" className="text-xs text-violet-400 hover:text-violet-300 font-medium">Forgot password?</Link>
+                <Link href="/forgot-password" className="text-xs text-violet-400 hover:text-violet-300 font-medium">Forgot password?</Link>
               </div>
               <div className="relative group">
                 <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${errors.password ? "text-red-400" : "text-zinc-500 group-focus-within:text-violet-400"}`} />

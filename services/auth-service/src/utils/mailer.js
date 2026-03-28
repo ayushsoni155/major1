@@ -114,4 +114,77 @@ async function sendOtpEmail(to, otp, name = 'there') {
   return info;
 }
 
-module.exports = { sendOtpEmail };
+/**
+ * Send a password-reset OTP email to the user.
+ * @param {string} to - Recipient email
+ * @param {string} otp  - 6-digit OTP string
+ * @param {string} name - User's display name
+ */
+async function sendPasswordResetEmail(to, otp, name = 'there') {
+  const transport = await getTransporter();
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>RapidBase Password Reset</title>
+    </head>
+    <body style="margin:0;padding:0;background:#0a0a0f;font-family:'Inter',system-ui,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 0;">
+        <tr><td align="center">
+          <table width="480" cellpadding="0" cellspacing="0" style="background:#13131a;border-radius:16px;border:1px solid #1e1e2e;overflow:hidden;">
+            <!-- Header -->
+            <tr>
+              <td style="background:linear-gradient(135deg,#ef4444,#f97316);padding:32px;text-align:center;">
+                <div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:-0.5px;">🔒 RapidBase</div>
+                <div style="color:rgba(255,255,255,0.8);font-size:14px;margin-top:4px;">Password Reset Request</div>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 32px;">
+                <p style="color:#e2e8f0;font-size:16px;margin:0 0 8px 0;">Hi <strong>${name}</strong>,</p>
+                <p style="color:#94a3b8;font-size:14px;margin:0 0 32px 0;">
+                  We received a request to reset your password. Use the code below to proceed. This code expires in <strong style="color:#ef4444;">10 minutes</strong>.
+                </p>
+                <!-- OTP Box -->
+                <div style="background:#0a0a0f;border:2px solid #ef4444;border-radius:12px;padding:24px;text-align:center;margin-bottom:32px;">
+                  <div style="font-size:40px;font-weight:800;letter-spacing:12px;color:#fff;font-family:monospace;">${otp}</div>
+                  <div style="color:#64748b;font-size:12px;margin-top:8px;">Password Reset Code</div>
+                </div>
+                <p style="color:#64748b;font-size:12px;margin:0;">
+                  If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#0a0a0f;padding:20px 32px;text-align:center;border-top:1px solid #1e1e2e;">
+                <p style="color:#475569;font-size:12px;margin:0;">© 2025 RapidBase • The Open-Source Backend for Rapid Development</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const info = await transport.sendMail({
+    from: process.env.SMTP_FROM || '"RapidBase" <noreply@rapidbase.dev>',
+    to,
+    subject: `${otp} is your RapidBase password reset code`,
+    html,
+    text: `Your RapidBase password reset code is: ${otp}\n\nThis code expires in 10 minutes. If you didn't request this, ignore this email.`,
+  });
+
+  const previewUrl = nodemailer.getTestMessageUrl(info);
+  if (previewUrl) {
+    console.log(`[Mailer] Password reset email preview URL: ${previewUrl}`);
+  }
+
+  return info;
+}
+
+module.exports = { sendOtpEmail, sendPasswordResetEmail };

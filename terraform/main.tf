@@ -59,5 +59,5 @@ resource "aws_instance" "rapidbase_ec2" {
 }
 resource "aws_ec2_instance_state" "all_servers_state" {
   instance_id = aws_instance.rapidbase_ec2.id
-  state       = "running"
+  state       = "stopped"
 }

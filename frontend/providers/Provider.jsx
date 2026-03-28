@@ -9,7 +9,7 @@ import { TableProvider } from "./TableContext";
 import SessionWatcher from "./SessionWatcher";
 import ProtectedRoute from "@/components/global/ProtectedRoute";
 
-const allowedRoutes = ["/", "/about", "/login", "/signup"];
+const allowedRoutes = ["/", "/about", "/login", "/signup", "/forgot-password"];
 
 export default function Provider({ children }) {
   return (
