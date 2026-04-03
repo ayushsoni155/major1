@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('../config/db');
+const redis = require('../config/redis');
 const { logAction, ACTION_TYPES } = require('../utils/auditLogger');
 
 // Generate a secure API key
@@ -93,7 +94,13 @@ const deleteApiKey = async (req, res, next) => {
     if (userId !== owner_id && role !== 'admin') {
       return res.status(403).json({ status: 403, data: null, message: 'Only admin can delete API keys.' });
     }
+    // Get the full API key before deleting so we can invalidate the cache
+    const { rows: keyRows } = await db.query('SELECT api_key FROM api_keys WHERE id = $1 AND project_id = $2', [keyId, projectId]);
     await db.query('DELETE FROM api_keys WHERE id = $1 AND project_id = $2', [keyId, projectId]);
+    // Invalidate the cached API key validation
+    if (keyRows.length > 0) {
+      await redis.del(`apikey:${keyRows[0].api_key}`).catch(() => {});
+    }
     await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.API_KEY_DELETED, details: { keyId }, ipAddress: req.ip });
     res.status(200).json({ status: 200, data: null, message: 'API key deleted.' });
   } catch (err) { next(err); }

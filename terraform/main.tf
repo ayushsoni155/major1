@@ -29,6 +29,21 @@ resource "aws_security_group" "rapidbase_sg" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "open for http"
   }
+  ingress {
+    protocol    = "tcp"
+    from_port   = 5050
+    to_port     = 5050
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "open for postgresAdmin"
+  }
+
+  ingress {
+    protocol    = "tcp"
+    from_port   = 8001
+    to_port     = 8001
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "open for redisAdmin"
+  }
   egress {
     protocol    = "-1"
     from_port   = 0
@@ -59,5 +74,5 @@ resource "aws_instance" "rapidbase_ec2" {
 }
 resource "aws_ec2_instance_state" "all_servers_state" {
   instance_id = aws_instance.rapidbase_ec2.id
-  state       = "stopped"
+  state       = "running"
 }

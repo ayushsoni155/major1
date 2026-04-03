@@ -16,11 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
     name            VARCHAR(255),
     avatar_url      TEXT,
     role            VARCHAR(50) DEFAULT 'user',
-    -- Email verification via OTP
+    -- Email verification status (OTP codes are stored in Redis)
     is_verified     BOOLEAN DEFAULT false,
-    otp_code        VARCHAR(6),
-    otp_expires_at  TIMESTAMPTZ,
-    otp_attempts    INTEGER DEFAULT 0,
     -- Account state
     is_active       BOOLEAN DEFAULT true,
     last_login      TIMESTAMPTZ,
@@ -106,7 +103,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- Indexes for Performance
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_users_email           ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_otp             ON users(email, otp_expires_at);
 CREATE INDEX IF NOT EXISTS idx_projects_owner        ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_proj  ON project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user  ON project_members(user_id);

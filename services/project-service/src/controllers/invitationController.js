@@ -126,6 +126,13 @@ const acceptInvitation = async (req, res, next) => {
     // Update invitation status
     await client.query(`UPDATE project_invitations SET status = 'accepted' WHERE id = $1`, [invite.id]);
 
+    // Mark the original invite notification as acted (so buttons don't reappear on refresh)
+    await client.query(
+      `UPDATE notifications SET data = data || '{"acted": true}'::jsonb
+       WHERE user_id = $1 AND type = 'member_invite' AND data->>'invitationId' = $2`,
+      [invite.invitee_id, invite.id]
+    );
+
     // Create notification for the inviter
     await createNotification(client, {
       userId: invite.inviter_id,
@@ -181,6 +188,13 @@ const declineInvitation = async (req, res, next) => {
 
     // Update status
     await client.query(`UPDATE project_invitations SET status = 'declined' WHERE id = $1`, [invite.id]);
+
+    // Mark the original invite notification as acted (so buttons don't reappear on refresh)
+    await client.query(
+      `UPDATE notifications SET data = data || '{"acted": true}'::jsonb
+       WHERE user_id = $1 AND type = 'member_invite' AND data->>'invitationId' = $2`,
+      [invite.invitee_id, invite.id]
+    );
 
     // Notify inviter
     await createNotification(client, {

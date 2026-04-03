@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const db = require('../config/db');
+const redis = require('../config/redis');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 const { sendOtpEmail, sendPasswordResetEmail } = require('../utils/mailer');
 
@@ -14,6 +15,15 @@ const COOKIE_OPTS = {
 };
 const ACCESS_COOKIE_MAX_AGE  = 15 * 60 * 1000;        // 15 minutes
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// ---- Redis key helpers ----
+const OTP_TTL      = 600; // 10 minutes
+const COOLDOWN_TTL = 60;  // 60 seconds
+const MAX_ATTEMPTS = 5;
+
+const otpKey      = (email) => `otp:${email}:code`;
+const attemptsKey = (email) => `otp:${email}:attempts`;
+const cooldownKey = (email) => `otp:${email}:cooldown`;
 
 function setAuthCookies(res, accessToken, refreshToken) {
   res.cookie('access_token', accessToken, {
@@ -34,6 +44,46 @@ function clearAuthCookies(res) {
 /** Generate a cryptographically random 6-digit OTP */
 function generateOtp() {
   return String(Math.floor(100000 + crypto.randomInt(0, 900000))).padStart(6, '0');
+}
+
+/** Store OTP in Redis with TTL + set cooldown */
+async function storeOtpInRedis(email, otp) {
+  const pipeline = redis.pipeline();
+  pipeline.set(otpKey(email), otp, 'EX', OTP_TTL);
+  pipeline.del(attemptsKey(email)); // reset attempts on new OTP
+  pipeline.set(cooldownKey(email), '1', 'EX', COOLDOWN_TTL);
+  await pipeline.exec();
+}
+
+/** Verify OTP from Redis. Returns { valid, error, statusCode } */
+async function verifyOtpFromRedis(email) {
+  // Check attempt limit
+  const attempts = parseInt(await redis.get(attemptsKey(email)) || '0', 10);
+  if (attempts >= MAX_ATTEMPTS) {
+    return { valid: false, statusCode: 429, error: 'Too many attempts. Please request a new code.' };
+  }
+
+  // Check if OTP exists (implicitly checks expiry via Redis TTL)
+  const storedOtp = await redis.get(otpKey(email));
+  if (!storedOtp) {
+    return { valid: false, statusCode: 400, error: 'OTP has expired or was not requested. Please request a new code.' };
+  }
+
+  return { valid: true, storedOtp };
+}
+
+/** Increment attempts counter in Redis */
+async function incrementAttempts(email) {
+  const pipeline = redis.pipeline();
+  pipeline.incr(attemptsKey(email));
+  // Ensure the attempts key also expires (in case it was created fresh)
+  pipeline.expire(attemptsKey(email), OTP_TTL);
+  await pipeline.exec();
+}
+
+/** Clear all OTP keys for an email */
+async function clearOtpFromRedis(email) {
+  await redis.del(otpKey(email), attemptsKey(email), cooldownKey(email));
 }
 
 // ============================================================
@@ -63,13 +113,9 @@ const register = async (req, res) => {
       if (existingUser.is_verified) {
         return res.status(409).json({ status: 409, data: null, message: 'An account with this email already exists' });
       }
-      // Re-send OTP for unverified account
+      // Re-send OTP for unverified account → store in Redis
       const otp = generateOtp();
-      const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-      await db.query(
-        'UPDATE users SET otp_code=$1, otp_expires_at=$2, otp_attempts=0 WHERE id=$3',
-        [otp, otpExpiry, existingUser.id]
-      );
+      await storeOtpInRedis(normalizedEmail, otp);
       await sendOtpEmail(normalizedEmail, otp, name || 'there');
       return res.status(200).json({
         status: 200,
@@ -82,16 +128,18 @@ const register = async (req, res) => {
     const salt = await bcrypt.genSalt(12);
     const password_hash = await bcrypt.hash(password, salt);
 
-    // Generate OTP
+    // Generate OTP → store in Redis
     const otp = generateOtp();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Insert unverified user
+    // Insert unverified user (no OTP columns in DB anymore)
     await db.query(
-      `INSERT INTO users (email, password_hash, name, is_verified, otp_code, otp_expires_at)
-       VALUES ($1, $2, $3, false, $4, $5)`,
-      [normalizedEmail, password_hash, name || null, otp, otpExpiry]
+      `INSERT INTO users (email, password_hash, name, is_verified)
+       VALUES ($1, $2, $3, false)`,
+      [normalizedEmail, password_hash, name || null]
     );
+
+    // Store OTP in Redis
+    await storeOtpInRedis(normalizedEmail, otp);
 
     // Send OTP email
     await sendOtpEmail(normalizedEmail, otp, name || 'there');
@@ -121,7 +169,7 @@ const verifyOtp = async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
 
     const result = await db.query(
-      'SELECT id, email, name, role, otp_code, otp_expires_at, otp_attempts, is_active FROM users WHERE email = $1',
+      'SELECT id, email, name, role, is_active FROM users WHERE email = $1',
       [normalizedEmail]
     );
 
@@ -131,22 +179,18 @@ const verifyOtp = async (req, res) => {
 
     const user = result.rows[0];
 
-    // Rate-limit OTP attempts
-    if (user.otp_attempts >= 5) {
-      return res.status(429).json({ status: 429, data: null, message: 'Too many attempts. Please request a new code.' });
-    }
-
-    // Check expiry
-    if (!user.otp_expires_at || new Date() > new Date(user.otp_expires_at)) {
-      return res.status(400).json({ status: 400, data: null, message: 'OTP has expired. Please request a new code.' });
+    // Verify OTP from Redis
+    const otpCheck = await verifyOtpFromRedis(normalizedEmail);
+    if (!otpCheck.valid) {
+      return res.status(otpCheck.statusCode).json({ status: otpCheck.statusCode, data: null, message: otpCheck.error });
     }
 
     // Increment attempt counter regardless
-    await db.query('UPDATE users SET otp_attempts = otp_attempts + 1 WHERE id = $1', [user.id]);
+    await incrementAttempts(normalizedEmail);
 
     // Constant-time comparison to prevent timing attacks
     const providedOtp = String(otp).trim();
-    const storedOtp   = String(user.otp_code).trim();
+    const storedOtp   = String(otpCheck.storedOtp).trim();
     const match = crypto.timingSafeEqual(
       Buffer.from(providedOtp.padEnd(6, ' ')),
       Buffer.from(storedOtp.padEnd(6,  ' '))
@@ -156,12 +200,12 @@ const verifyOtp = async (req, res) => {
       return res.status(400).json({ status: 400, data: null, message: 'Invalid verification code' });
     }
 
-    // Mark user as verified, clear OTP
+    // Mark user as verified in DB, clear OTP from Redis
     await db.query(
-      `UPDATE users SET is_verified=true, otp_code=NULL, otp_expires_at=NULL, otp_attempts=0, last_login=NOW()
-       WHERE id=$1`,
+      `UPDATE users SET is_verified=true, last_login=NOW() WHERE id=$1`,
       [user.id]
     );
+    await clearOtpFromRedis(normalizedEmail);
 
     // Issue tokens → set HttpOnly cookies
     const tokenPayload = { id: user.id, email: user.email, name: user.name, role: user.role };
@@ -192,7 +236,7 @@ const resendOtp = async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const result = await db.query(
-      'SELECT id, name, is_verified, otp_expires_at FROM users WHERE email = $1',
+      'SELECT id, name, is_verified FROM users WHERE email = $1',
       [normalizedEmail]
     );
 
@@ -205,26 +249,18 @@ const resendOtp = async (req, res) => {
       return res.status(400).json({ status: 400, data: null, message: 'Account already verified' });
     }
 
-    // Cooldown: prevent spamming (must wait 60s)
-    if (user.otp_expires_at) {
-      const createdAt = new Date(user.otp_expires_at).getTime() - 10 * 60 * 1000;
-      const cooldownEnd = createdAt + 60 * 1000;
-      if (Date.now() < cooldownEnd) {
-        const waitSec = Math.ceil((cooldownEnd - Date.now()) / 1000);
-        return res.status(429).json({
-          status: 429, data: null,
-          message: `Please wait ${waitSec} seconds before requesting a new code`,
-        });
-      }
+    // Cooldown check via Redis
+    const onCooldown = await redis.exists(cooldownKey(normalizedEmail));
+    if (onCooldown) {
+      const ttl = await redis.ttl(cooldownKey(normalizedEmail));
+      return res.status(429).json({
+        status: 429, data: null,
+        message: `Please wait ${ttl > 0 ? ttl : 1} seconds before requesting a new code`,
+      });
     }
 
     const otp = generateOtp();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-
-    await db.query(
-      'UPDATE users SET otp_code=$1, otp_expires_at=$2, otp_attempts=0 WHERE id=$3',
-      [otp, otpExpiry, user.id]
-    );
+    await storeOtpInRedis(normalizedEmail, otp);
     await sendOtpEmail(normalizedEmail, otp, user.name || 'there');
 
     return res.status(200).json({ status: 200, data: null, message: 'New verification code sent to your email' });
@@ -296,8 +332,6 @@ const login = async (req, res) => {
 
 // ============================================================
 // LOGOUT — clears cookies
-// ============================================================
-// LOGOUT
 // ============================================================
 const logout = (req, res) => {
   clearAuthCookies(res);
@@ -411,7 +445,7 @@ const forgotPassword = async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const result = await db.query(
-      'SELECT id, name, is_verified, is_active, otp_expires_at FROM users WHERE email = $1',
+      'SELECT id, name, is_verified, is_active FROM users WHERE email = $1',
       [normalizedEmail]
     );
 
@@ -430,26 +464,18 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ status: 400, data: { email: normalizedEmail, requiresVerification: true }, message: 'Please verify your email first before resetting password.' });
     }
 
-    // Cooldown: prevent spamming (must wait 60s)
-    if (user.otp_expires_at) {
-      const createdAt = new Date(user.otp_expires_at).getTime() - 10 * 60 * 1000;
-      const cooldownEnd = createdAt + 60 * 1000;
-      if (Date.now() < cooldownEnd) {
-        const waitSec = Math.ceil((cooldownEnd - Date.now()) / 1000);
-        return res.status(429).json({
-          status: 429, data: null,
-          message: `Please wait ${waitSec} seconds before requesting a new code`,
-        });
-      }
+    // Cooldown check via Redis
+    const onCooldown = await redis.exists(cooldownKey(normalizedEmail));
+    if (onCooldown) {
+      const ttl = await redis.ttl(cooldownKey(normalizedEmail));
+      return res.status(429).json({
+        status: 429, data: null,
+        message: `Please wait ${ttl > 0 ? ttl : 1} seconds before requesting a new code`,
+      });
     }
 
     const otp = generateOtp();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-
-    await db.query(
-      'UPDATE users SET otp_code=$1, otp_expires_at=$2, otp_attempts=0 WHERE id=$3',
-      [otp, otpExpiry, user.id]
-    );
+    await storeOtpInRedis(normalizedEmail, otp);
     await sendPasswordResetEmail(normalizedEmail, otp, user.name || 'there');
 
     return res.status(200).json({ status: 200, data: { email: normalizedEmail }, message: 'If an account exists with this email, a reset code has been sent.' });
@@ -475,7 +501,7 @@ const resetPassword = async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const result = await db.query(
-      'SELECT id, otp_code, otp_expires_at, otp_attempts, is_active, is_verified FROM users WHERE email = $1',
+      'SELECT id, is_active, is_verified FROM users WHERE email = $1',
       [normalizedEmail]
     );
 
@@ -489,22 +515,18 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ status: 400, data: null, message: 'Account is not active or not verified' });
     }
 
-    // Rate-limit OTP attempts
-    if (user.otp_attempts >= 5) {
-      return res.status(429).json({ status: 429, data: null, message: 'Too many attempts. Please request a new code.' });
-    }
-
-    // Check expiry
-    if (!user.otp_expires_at || new Date() > new Date(user.otp_expires_at)) {
-      return res.status(400).json({ status: 400, data: null, message: 'Reset code has expired. Please request a new one.' });
+    // Verify OTP from Redis
+    const otpCheck = await verifyOtpFromRedis(normalizedEmail);
+    if (!otpCheck.valid) {
+      return res.status(otpCheck.statusCode).json({ status: otpCheck.statusCode, data: null, message: otpCheck.error });
     }
 
     // Increment attempt counter
-    await db.query('UPDATE users SET otp_attempts = otp_attempts + 1 WHERE id = $1', [user.id]);
+    await incrementAttempts(normalizedEmail);
 
     // Constant-time comparison
     const providedOtp = String(otp).trim();
-    const storedOtp   = String(user.otp_code).trim();
+    const storedOtp   = String(otpCheck.storedOtp).trim();
     const match = crypto.timingSafeEqual(
       Buffer.from(providedOtp.padEnd(6, ' ')),
       Buffer.from(storedOtp.padEnd(6, ' '))
@@ -514,15 +536,17 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ status: 400, data: null, message: 'Invalid reset code' });
     }
 
-    // Hash new password and update
+    // Hash new password and update in DB
     const salt = await bcrypt.genSalt(12);
     const password_hash = await bcrypt.hash(newPassword, salt);
 
     await db.query(
-      `UPDATE users SET password_hash=$1, otp_code=NULL, otp_expires_at=NULL, otp_attempts=0, updated_at=NOW()
-       WHERE id=$2`,
+      `UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2`,
       [password_hash, user.id]
     );
+
+    // Clear OTP from Redis
+    await clearOtpFromRedis(normalizedEmail);
 
     return res.status(200).json({ status: 200, data: null, message: 'Password reset successfully. You can now log in with your new password.' });
   } catch (error) {

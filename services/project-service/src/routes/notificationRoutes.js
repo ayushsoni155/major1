@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { getNotifications, getUnreadCount, markAsRead, markAllRead } = require('../controllers/notificationController');
+const { getNotifications, getUnreadCount, markAsRead, markAllRead, streamNotifications } = require('../controllers/notificationController');
 const { protect } = require('../middleware/authMiddleware');
 
 router.use(protect);
+
+// SSE stream — must be before any wildcard routes
+router.get('/notifications/stream', streamNotifications);
 
 router.get('/notifications', getNotifications);
 router.get('/notifications/unread-count', getUnreadCount);

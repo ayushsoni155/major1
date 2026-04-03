@@ -48,6 +48,7 @@ function MiniNotificationItem({ notification, onAction, onRead, isActed, onActed
   const isInvite = notification.type === "member_invite";
   const data = notification.data || {};
   const [acting, setActing] = useState(false);
+  const [responded, setResponded] = useState(false);
 
   const handleAccept = async (e) => {
     e.stopPropagation();
@@ -55,7 +56,8 @@ function MiniNotificationItem({ notification, onAction, onRead, isActed, onActed
     try {
       await api.post(`/projects/invitations/accept/${data.token}`);
       toast.success("Invitation accepted!");
-      onActed?.(notification.id);   // mark acted in parent BEFORE re-fetch
+      setResponded(true);
+      onActed?.(notification.id);
       onAction?.();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to accept.");
@@ -70,7 +72,8 @@ function MiniNotificationItem({ notification, onAction, onRead, isActed, onActed
     try {
       await api.post(`/projects/invitations/decline/${data.token}`);
       toast.success("Invitation declined.");
-      onActed?.(notification.id);   // mark acted in parent BEFORE re-fetch
+      setResponded(true);
+      onActed?.(notification.id);
       onAction?.();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to decline.");
@@ -111,7 +114,7 @@ function MiniNotificationItem({ notification, onAction, onRead, isActed, onActed
           </p>
         )}
 
-        {isInvite && data.token && !isActed && (
+        {isInvite && data.token && !isActed && !responded && !data.acted && (
           <div className="flex items-center gap-1.5 mt-2">
             <button
               onClick={handleAccept}
@@ -129,7 +132,7 @@ function MiniNotificationItem({ notification, onAction, onRead, isActed, onActed
             </button>
           </div>
         )}
-        {isInvite && data.token && isActed && (
+        {isInvite && data.token && (isActed || responded || data.acted) && (
           <p className="text-[10px] text-zinc-500 mt-1 italic">Responded ✓</p>
         )}
 
@@ -143,8 +146,8 @@ function MiniNotificationItem({ notification, onAction, onRead, isActed, onActed
 }
 
 /**
- * NotificationBell — embeddable bell icon + floating notification panel.
- * Drop this anywhere in the nav/sidebar:
+ * NotificationBell — real-time notifications via SSE (Server-Sent Events).
+ * Falls back to HTTP polling if SSE connection fails.
  *
  *   import NotificationBell from "@/components/notification/notificationUse";
  *   <NotificationBell />
@@ -154,16 +157,19 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
-  // actedIds persists across re-fetches so buttons don't reappear
   const [actedIds, setActedIds] = useState(new Set());
+  const [sseConnected, setSseConnected] = useState(false);
   const panelRef = useRef(null);
   const buttonRef = useRef(null);
+  const eventSourceRef = useRef(null);
+  const retryTimeoutRef = useRef(null);
 
   const handleActed = (id) =>
     setActedIds((prev) => new Set([...prev, id]));
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
+  // ---- Fetch notifications via HTTP (initial load + fallback) ----
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
     try {
@@ -176,12 +182,79 @@ export default function NotificationBell() {
     }
   }, []);
 
-  // Fetch on mount + every 30 s
+  // ---- SSE Connection ----
+  const connectSSE = useCallback(() => {
+    // Close existing connection if any
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const sseUrl = `/api/projects/notifications/stream`;
+    const eventSource = new EventSource(sseUrl, { withCredentials: true });
+    eventSourceRef.current = eventSource;
+
+    eventSource.addEventListener("notification", (event) => {
+      try {
+        const newNotification = JSON.parse(event.data);
+        // Prepend new notification to the list
+        setNotifications((prev) => {
+          const updated = [newNotification, ...prev].slice(0, 8);
+          return updated;
+        });
+        // Show toast for real-time notifications
+        toast.info(newNotification.title, {
+          description: newNotification.message,
+          duration: 5000,
+        });
+      } catch (err) {
+        console.error("[SSE] Failed to parse notification:", err);
+      }
+    });
+
+    eventSource.addEventListener("unread_count", (event) => {
+      // Initial unread count from server — we already track it locally
+    });
+
+    eventSource.onopen = () => {
+      setSseConnected(true);
+      console.log("[SSE] Connected to notification stream");
+    };
+
+    eventSource.onerror = () => {
+      setSseConnected(false);
+      eventSource.close();
+      eventSourceRef.current = null;
+      // Retry SSE connection after 5 seconds
+      retryTimeoutRef.current = setTimeout(() => {
+        console.log("[SSE] Reconnecting...");
+        connectSSE();
+      }, 5000);
+    };
+  }, []);
+
+  // ---- Initialize: fetch + connect SSE ----
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30_000);
+    connectSSE();
+
+    return () => {
+      // Cleanup on unmount
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, [fetchNotifications, connectSSE]);
+
+  // ---- Fallback: poll every 60s only if SSE is disconnected ----
+  useEffect(() => {
+    if (sseConnected) return; // SSE is working, no need to poll
+    const interval = setInterval(fetchNotifications, 60_000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [sseConnected, fetchNotifications]);
 
   // Close on outside click
   useEffect(() => {
@@ -263,6 +336,13 @@ export default function NotificationBell() {
                     {unreadCount} new
                   </span>
                 )}
+                {/* SSE connection indicator */}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    sseConnected ? "bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.8)]" : "bg-zinc-600"
+                  }`}
+                  title={sseConnected ? "Live connection" : "Reconnecting..."}
+                />
               </div>
               {unreadCount > 0 && (
                 <button

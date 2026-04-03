@@ -1,7 +1,12 @@
 const db = require('../config/db');
+const redis = require('../config/redis');
 const { validationResult } = require('express-validator');
 const { generateSchemaName } = require('../utils/sanitize');
 const { logAction, ACTION_TYPES } = require('../utils/auditLogger');
+
+// ---- Redis cache TTLs ----
+const API_KEY_CACHE_TTL = 300; // 5 minutes
+const PROJECT_LIST_CACHE_TTL = 600; // 10 minutes
 
 const getProjectWithRole = async (projectId, userId) => {
   const { rows } = await db.query(
@@ -45,6 +50,8 @@ const createProject = async (req, res, next) => {
     await client.query(`NOTIFY pgrst, 'reload config';`);
     await client.query(`NOTIFY pgrst, 'reload schema';`);
     await client.query('COMMIT');
+    // Invalidate project list cache for this user
+    await redis.del(`projects:user:${ownerId}`).catch(() => {});
     await logAction({ projectId: project.project_id, actorId: ownerId, actionType: ACTION_TYPES.PROJECT_CREATED, details: { project_name: name, schemaName }, ipAddress: req.ip });
     res.status(201).json({ status: 201, data: project, message: 'Project created successfully' });
   } catch (error) {
@@ -55,9 +62,15 @@ const createProject = async (req, res, next) => {
   }
 };
 
-// GET USER PROJECTS
+// GET USER PROJECTS (cached in Redis)
 const getUserProjects = async (req, res, next) => {
   try {
+    const cacheKey = `projects:user:${req.user.id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.status(200).json({ status: 200, data: JSON.parse(cached), message: 'Projects retrieved successfully' });
+    }
+
     const { rows } = await db.query(
       `SELECT p.*, pm.role, u.name AS owner_name
        FROM projects p
@@ -67,6 +80,8 @@ const getUserProjects = async (req, res, next) => {
        ORDER BY p.created_at DESC`,
       [req.user.id]
     );
+
+    await redis.set(cacheKey, JSON.stringify(rows), 'EX', PROJECT_LIST_CACHE_TTL);
     res.status(200).json({ status: 200, data: rows, message: 'Projects retrieved successfully' });
   } catch (error) { next(error); }
 };
@@ -102,6 +117,8 @@ const updateProject = async (req, res, next) => {
       `UPDATE projects SET ${fields.join(', ')}, updated_at = NOW() WHERE project_id = $${idx} RETURNING *`,
       values
     );
+    // Invalidate project list cache for this user
+    await redis.del(`projects:user:${userId}`).catch(() => {});
     await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.PROJECT_UPDATED, details: { name, status, description }, ipAddress: req.ip });
     res.status(200).json({ status: 200, data: rows[0], message: 'Project updated' });
   } catch (error) { next(error); }
@@ -120,6 +137,8 @@ const deleteProject = async (req, res, next) => {
     await client.query(`DROP SCHEMA IF EXISTS "${project.schema_name}" CASCADE`);
     await client.query(`DELETE FROM projects WHERE project_id = $1`, [projectId]);
     await client.query('COMMIT');
+    // Invalidate project list cache and project schema cache
+    await redis.del(`projects:user:${userId}`, `project_schema:${projectId}`).catch(() => {});
     await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.PROJECT_DELETED, details: { project_name: project.project_name }, ipAddress: req.ip });
     res.status(200).json({ status: 200, data: null, message: 'Project deleted' });
   } catch (err) {
@@ -128,7 +147,7 @@ const deleteProject = async (req, res, next) => {
   } finally { client.release(); }
 };
 
-// VALIDATE API KEY (used by Nginx auth_request)
+// VALIDATE API KEY (used by Nginx auth_request) — cached in Redis
 const validateApiKey = async (req, res) => {
   const apiKey = req.headers['x-api-key'];
   const origin = req.headers['x-origin'] || '';
@@ -136,23 +155,41 @@ const validateApiKey = async (req, res) => {
   if (!apiKey) return res.status(401).json({ message: 'Missing API key' });
 
   try {
-    const { rows } = await db.query(
-      `SELECT a.origin_url, a.is_active, p.schema_name
-       FROM api_keys a
-       JOIN projects p ON a.project_id = p.project_id
-       WHERE a.api_key = $1`,
-      [apiKey]
-    );
+    // Check Redis cache first
+    const cacheKey = `apikey:${apiKey}`;
+    let keyData;
 
-    if (!rows.length || !rows[0].is_active) {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      keyData = JSON.parse(cached);
+    } else {
+      // Cache miss → query DB
+      const { rows } = await db.query(
+        `SELECT a.origin_url, a.is_active, p.schema_name
+         FROM api_keys a
+         JOIN projects p ON a.project_id = p.project_id
+         WHERE a.api_key = $1`,
+        [apiKey]
+      );
+
+      if (!rows.length || !rows[0].is_active) {
+        return res.status(401).json({ message: 'Invalid or inactive API key' });
+      }
+
+      keyData = rows[0];
+      // Cache the result
+      await redis.set(cacheKey, JSON.stringify(keyData), 'EX', API_KEY_CACHE_TTL);
+    }
+
+    if (!keyData.is_active) {
       return res.status(401).json({ message: 'Invalid or inactive API key' });
     }
 
-    const keyData = rows[0];
     if (keyData.origin_url && keyData.origin_url !== '*' && origin !== keyData.origin_url) {
       return res.status(403).json({ message: 'Origin not allowed' });
     }
 
+    // Fire-and-forget: update last_used_at (no need to await)
     db.query(`UPDATE api_keys SET last_used_at = NOW() WHERE api_key = $1`, [apiKey]).catch(e => console.error(e));
 
     res.set('X-Schema-Name', keyData.schema_name);
