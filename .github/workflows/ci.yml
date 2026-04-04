@@ -8,6 +8,9 @@ on:
     branches:
       - main # Trigger on PRs against the main branch
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # 1. Scan filesystem
   filesystem_scan:
