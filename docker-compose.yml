@@ -72,9 +72,7 @@ services:
   # Auth Service
   # ============================================
   auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/auth-service:latest
     container_name: rapidbase-auth
     restart: unless-stopped
     environment:
@@ -113,9 +111,7 @@ services:
   # Project Service
   # ============================================
   project-service:
-    build:
-      context: ./services/project-service
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/project-service:latest
     container_name: rapidbase-project
     restart: unless-stopped
     environment:
@@ -151,9 +147,7 @@ services:
   # Database Service
   # ============================================
   database-service:
-    build:
-      context: ./services/database-service
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/database-service:latest
     container_name: rapidbase-database
     restart: unless-stopped
     environment:
@@ -183,9 +177,7 @@ services:
   # Analytics Service
   # ============================================
   analytics-service:
-    build:
-      context: ./services/analytics-service
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/analytics-service:latest
     container_name: rapidbase-analytics
     restart: unless-stopped
     environment:
@@ -214,11 +206,7 @@ services:
   # Frontend (Next.js)
   # ============================================
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: /api
+    image: ${DOCKERHUB_USERNAME}/frontend:latest
     container_name: rapidbase-frontend
     restart: unless-stopped
     environment:
@@ -275,9 +263,7 @@ services:
   # Nginx API Gateway — Port 80
   # ============================================
   nginx-gateway:
-    build:
-      context: ./services/nginx-gateway
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/nginx-gateway:latest
     container_name: rapidbase-gateway
     restart: unless-stopped
     ports:
