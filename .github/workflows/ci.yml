@@ -7,10 +7,7 @@ on:
   pull_request:
     branches:
       - main # Trigger on PRs against the main branch
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
+      
 jobs:
   # 1. Scan filesystem
   filesystem_scan:
@@ -26,8 +23,28 @@ jobs:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'table'
+          output: 'trivy-results.txt'
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
+
+      - name: Display Trivy scan logs
+        if: always()
+        run: cat trivy-results.txt
+
+      - name: Send Email with Scan Results
+        uses: dawidd6/action-send-mail@v3
+        if: always()
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Trivy Scan Results - ${{ github.repository }}"
+          to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
+          from: "GitHub Actions"
+          body: "The Trivy Filesystem scanning job has finished. Please find the attached vulnerability scan artifact."
+          attachments: trivy-results.txt
 
   # 2. Build, Scan, and Push Services using a Matrix
   build_and_push:
