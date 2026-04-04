@@ -1,1 +1,7 @@
-test:
+stages:
+  - build
+
+job1:
+  stage: build
+  script:
+    - echo "This is job 1"
