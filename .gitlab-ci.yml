@@ -10,7 +10,7 @@ variables:
 filesystem_scan:
   stage: scan
   image:
-    name: aquasec/trivy:latest
+    name: aquasec/trivy:0.48.3
     entrypoint: [""]
   script:
     - echo "Scanning project files for vulnerabilities..."
