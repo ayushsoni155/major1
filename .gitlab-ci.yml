@@ -54,7 +54,7 @@ build_scan_push_services:
     - echo "Scanning ${IMAGE_TAG}..."
     # We download trivy locally to scan without nested Docker-in-Docker complexities for volume mappings
     - apk add --no-cache curl
-    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.48.3
+    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
     - trivy image --format table --exit-code 0 --severity HIGH,CRITICAL $IMAGE_TAG
     
     # Push image to Docker Hub
