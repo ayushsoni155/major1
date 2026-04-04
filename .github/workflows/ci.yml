@@ -1,0 +1,99 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main # Trigger on pushes to the main branch
+  pull_request:
+    branches:
+      - main # Trigger on PRs against the main branch
+
+jobs:
+  # 1. Scan filesystem
+  filesystem_scan:
+    name: Filesystem Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
+
+  # 2. Build, Scan, and Push Services using a Matrix
+  build_and_push:
+    name: Build & Push ${{ matrix.service.name }}
+    needs: filesystem_scan # Equivalent to stages: waits for scan to pass
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # If one service fails, let the others finish
+      matrix:
+        service:
+          - name: "auth-service"
+            context: "./services/auth-service"
+            build_args: ""
+          - name: "project-service"
+            context: "./services/project-service"
+            build_args: ""
+          - name: "database-service"
+            context: "./services/database-service"
+            build_args: ""
+          - name: "analytics-service"
+            context: "./services/analytics-service"
+            build_args: ""
+          - name: "nginx-gateway"
+            context: "./services/nginx-gateway"
+            build_args: ""
+          - name: "frontend"
+            context: "./frontend"
+            build_args: "--build-arg NEXT_PUBLIC_API_URL=/api"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate Short SHA
+        id: vars
+        run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Set Image Tags
+        env:
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          UNIQUE_TAG="${{ github.run_id }}-${{ env.SHORT_SHA }}"
+          echo "IMAGE_TAG=${DOCKER_USER}/${{ matrix.service.name }}:${UNIQUE_TAG}" >> $GITHUB_ENV
+          echo "LATEST_TAG=${DOCKER_USER}/${{ matrix.service.name }}:latest" >> $GITHUB_ENV
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker Image
+        run: |
+          echo "Building docker image for ${{ matrix.service.name }}..."
+          docker build ${{ matrix.service.build_args }} \
+            -t ${{ env.IMAGE_TAG }} \
+            -t ${{ env.LATEST_TAG }} \
+            ${{ matrix.service.context }}
+
+      - name: Run Trivy vulnerability scanner on built image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_TAG }}
+          format: 'table'
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Push Docker Images
+        run: |
+          echo "Successfully built and scanned, pushing both tags..."
+          docker push ${{ env.IMAGE_TAG }}
+          docker push ${{ env.LATEST_TAG }}
