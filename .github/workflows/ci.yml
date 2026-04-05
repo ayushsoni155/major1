@@ -3,13 +3,15 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - main # Trigger on pushes to the main branch
+      - main
   pull_request:
     branches:
-      - main # Trigger on PRs against the main branch
-      
+      - main
+
 jobs:
-  # 1. Scan filesystem
+  # ─────────────────────────────────────────────
+  # 1. Filesystem Vulnerability Scan
+  # ─────────────────────────────────────────────
   filesystem_scan:
     name: Filesystem Scan
     runs-on: ubuntu-latest
@@ -18,41 +20,72 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy filesystem scan
+        id: trivy_fs
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'table'
-          output: 'trivy-results.txt'
+          output: 'trivy-fs-results.txt'
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
 
-      - name: Display Trivy scan logs
+      - name: Upload scan results as artifact
         if: always()
-        run: cat trivy-results.txt
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-results
+          path: trivy-fs-results.txt
+          retention-days: 7
 
-      - name: Send Email with Scan Results
+      - name: Send failure email — Filesystem Scan
+        if: failure()
         uses: dawidd6/action-send-mail@v3
-        if: always()
         with:
           server_address: smtp.gmail.com
           server_port: 465
           secure: true
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Trivy Scan Results - ${{ github.repository }}"
           to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
-          from: "GitHub Actions"
-          body: "The Trivy Filesystem scanning job has finished. Please find the attached vulnerability scan artifact."
-          attachments: trivy-results.txt
+          from: "RapidBase CI <${{ secrets.MAIL_USERNAME }}>"
+          subject: "❌ Pipeline Failed — Filesystem Scan | ${{ github.repository }}"
+          content_type: text/html
+          body: |
+            <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
+              <div style="background:linear-gradient(135deg,#da3633,#b91c1c);padding:28px 32px">
+                <h1 style="margin:0;font-size:22px;font-weight:700">❌ Pipeline Failed</h1>
+                <p style="margin:6px 0 0;opacity:.85;font-size:14px">Filesystem vulnerability scan did not complete successfully</p>
+              </div>
+              <div style="padding:28px 32px">
+                <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+                  <tr><td style="padding:8px 0;color:#8b949e;width:140px">📦 Repository</td><td style="padding:8px 0;font-weight:600">${{ github.repository }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌿 Branch</td><td style="padding:8px 0;font-weight:600">${{ github.ref_name }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">💬 Commit</td><td style="padding:8px 0;font-family:monospace;font-size:13px">${{ github.sha }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">👤 Author</td><td style="padding:8px 0">${{ github.actor }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">💥 Failed Job</td><td style="padding:8px 0"><span style="background:#da3633;color:#fff;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700">Filesystem Scan</span></td></tr>
+                </table>
+                <div style="background:#161b22;border:1px solid #30363d;border-left:4px solid #da3633;border-radius:8px;padding:16px;margin-bottom:24px">
+                  <p style="margin:0;font-size:13px;color:#f85149;font-weight:600">⚠️ What failed</p>
+                  <p style="margin:8px 0 0;font-size:13px;color:#8b949e">The Trivy filesystem scan job failed. Check the attached <code style="background:#21262d;padding:2px 6px;border-radius:4px">trivy-fs-results.txt</code> for vulnerabilities found in the source code.</p>
+                </div>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display:inline-block;background:linear-gradient(135deg,#da3633,#b91c1c);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">🔍 View Full Logs</a>
+              </div>
+              <div style="padding:16px 32px;background:#161b22;border-top:1px solid #30363d;font-size:12px;color:#484f58;text-align:center">
+                RapidBase CI/CD • Run #${{ github.run_number }} • ${{ github.workflow }}
+              </div>
+            </div>
+          attachments: trivy-fs-results.txt
 
-  # 2. Build, Scan, and Push Services using a Matrix
+  # ─────────────────────────────────────────────
+  # 2. Build, Scan & Push — Matrix per service
+  # ─────────────────────────────────────────────
   build_and_push:
-    name: Build & Push ${{ matrix.service.name }}
-    needs: filesystem_scan # Equivalent to stages: waits for scan to pass
+    name: Build & Push — ${{ matrix.service.name }}
+    needs: filesystem_scan
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # If one service fails, let the others finish
+      fail-fast: false
       matrix:
         service:
           - name: "auth-service"
@@ -97,23 +130,124 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build Docker Image
+        id: build
         run: |
-          echo "Building docker image for ${{ matrix.service.name }}..."
           docker build ${{ matrix.service.build_args }} \
             -t ${{ env.IMAGE_TAG }} \
             -t ${{ env.LATEST_TAG }} \
-            ${{ matrix.service.context }}
+            ${{ matrix.service.context }} 2>&1 | tee build-log.txt
 
-      - name: Run Trivy vulnerability scanner on built image
+      - name: Run Trivy image scan
+        id: trivy_image
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_TAG }}
           format: 'table'
+          output: 'trivy-image-results.txt'
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
 
       - name: Push Docker Images
+        id: push
         run: |
-          echo "Successfully built and scanned, pushing both tags..."
           docker push ${{ env.IMAGE_TAG }}
           docker push ${{ env.LATEST_TAG }}
+
+      - name: Send failure email — Build/Push
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
+          from: "RapidBase CI <${{ secrets.MAIL_USERNAME }}>"
+          subject: "❌ Pipeline Failed — ${{ matrix.service.name }} | ${{ github.repository }}"
+          content_type: text/html
+          body: |
+            <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
+              <div style="background:linear-gradient(135deg,#da3633,#b91c1c);padding:28px 32px">
+                <h1 style="margin:0;font-size:22px;font-weight:700">❌ Build Failed</h1>
+                <p style="margin:6px 0 0;opacity:.85;font-size:14px">A service failed to build or push in your CI pipeline</p>
+              </div>
+              <div style="padding:28px 32px">
+                <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+                  <tr><td style="padding:8px 0;color:#8b949e;width:140px">📦 Repository</td><td style="padding:8px 0;font-weight:600">${{ github.repository }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌿 Branch</td><td style="padding:8px 0;font-weight:600">${{ github.ref_name }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">💬 Commit</td><td style="padding:8px 0;font-family:monospace;font-size:13px">${{ github.sha }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">👤 Author</td><td style="padding:8px 0">${{ github.actor }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🐳 Service</td><td style="padding:8px 0"><span style="background:#da3633;color:#fff;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700">${{ matrix.service.name }}</span></td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🏷️ Image Tag</td><td style="padding:8px 0;font-family:monospace;font-size:12px">${{ env.IMAGE_TAG }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">⚡ Step</td><td style="padding:8px 0">
+                    ${{ steps.build.outcome == 'failure' && '<span style="background:#da3633;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">docker build</span>' || '' }}
+                    ${{ steps.trivy_image.outcome == 'failure' && '<span style="background:#da3633;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">trivy image scan</span>' || '' }}
+                    ${{ steps.push.outcome == 'failure' && '<span style="background:#da3633;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">docker push</span>' || '' }}
+                  </td></tr>
+                </table>
+                <div style="background:#161b22;border:1px solid #30363d;border-left:4px solid #da3633;border-radius:8px;padding:16px;margin-bottom:24px">
+                  <p style="margin:0;font-size:13px;color:#f85149;font-weight:600">⚠️ What to do</p>
+                  <p style="margin:8px 0 0;font-size:13px;color:#8b949e">Check the full build log in the attached file and view the Actions run for the complete error output. Fix the issue and push again to re-trigger the pipeline.</p>
+                </div>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display:inline-block;background:linear-gradient(135deg,#da3633,#b91c1c);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">🔍 View Full Logs</a>
+              </div>
+              <div style="padding:16px 32px;background:#161b22;border-top:1px solid #30363d;font-size:12px;color:#484f58;text-align:center">
+                RapidBase CI/CD • Run #${{ github.run_number }} • ${{ github.workflow }}
+              </div>
+            </div>
+          attachments: build-log.txt
+
+  # ─────────────────────────────────────────────
+  # 3. Final — Success notification (runs only if ALL jobs passed)
+  # ─────────────────────────────────────────────
+  notify_success:
+    name: Notify Success
+    needs: [filesystem_scan, build_and_push]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Send success email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
+          from: "RapidBase CI <${{ secrets.MAIL_USERNAME }}>"
+          subject: "✅ Pipeline Passed — ${{ github.repository }}"
+          content_type: text/html
+          body: |
+            <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
+              <div style="background:linear-gradient(135deg,#238636,#196127);padding:28px 32px">
+                <h1 style="margin:0;font-size:22px;font-weight:700">✅ Pipeline Passed</h1>
+                <p style="margin:6px 0 0;opacity:.85;font-size:14px">All jobs completed successfully — images are live on Docker Hub</p>
+              </div>
+              <div style="padding:28px 32px">
+                <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+                  <tr><td style="padding:8px 0;color:#8b949e;width:140px">📦 Repository</td><td style="padding:8px 0;font-weight:600">${{ github.repository }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌿 Branch</td><td style="padding:8px 0;font-weight:600">${{ github.ref_name }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">💬 Commit</td><td style="padding:8px 0;font-family:monospace;font-size:13px">${{ github.sha }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">👤 Author</td><td style="padding:8px 0">${{ github.actor }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🏃 Run</td><td style="padding:8px 0">#${{ github.run_number }}</td></tr>
+                </table>
+                <div style="background:#161b22;border:1px solid #30363d;border-left:4px solid #238636;border-radius:8px;padding:16px;margin-bottom:24px">
+                  <p style="margin:0;font-size:13px;color:#3fb950;font-weight:600">🚀 What was deployed</p>
+                  <ul style="margin:8px 0 0;padding-left:20px;font-size:13px;color:#8b949e;line-height:2">
+                    <li>✔ Filesystem vulnerability scan passed</li>
+                    <li>✔ auth-service → Docker Hub</li>
+                    <li>✔ project-service → Docker Hub</li>
+                    <li>✔ database-service → Docker Hub</li>
+                    <li>✔ analytics-service → Docker Hub</li>
+                    <li>✔ nginx-gateway → Docker Hub</li>
+                    <li>✔ frontend → Docker Hub</li>
+                  </ul>
+                </div>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display:inline-block;background:linear-gradient(135deg,#238636,#196127);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">📋 View Run Details</a>
+              </div>
+              <div style="padding:16px 32px;background:#161b22;border-top:1px solid #30363d;font-size:12px;color:#484f58;text-align:center">
+                RapidBase CI/CD • Run #${{ github.run_number }} • ${{ github.workflow }}
+              </div>
+            </div>
