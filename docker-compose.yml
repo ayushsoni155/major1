@@ -98,12 +98,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4001/health || exit 1" ]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    # healthcheck is defined in the Dockerfile (Distroless has no shell)
     networks:
       - rapidbase-network
 
@@ -134,12 +129,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4002/health || exit 1" ]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    # healthcheck is defined in the Dockerfile (Distroless has no shell)
     networks:
       - rapidbase-network
 
@@ -164,12 +154,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4003/health || exit 1" ]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    # healthcheck is defined in the Dockerfile (Distroless has no shell)
     networks:
       - rapidbase-network
 
@@ -193,12 +178,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q --spider http://localhost:4004/health || exit 1" ]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    # healthcheck is defined in the Dockerfile (Distroless has no shell)
     networks:
       - rapidbase-network
 

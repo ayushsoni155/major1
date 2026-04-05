@@ -16,4 +16,7 @@ USER nonroot
 EXPOSE 4001
 ENV NODE_ENV=production
 
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["/nodejs/bin/node", "healthcheck.js"]
+
 CMD ["server.js"]
