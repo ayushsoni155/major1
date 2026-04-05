@@ -50,8 +50,7 @@ jobs:
           to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
           from: "RapidBase CI <${{ secrets.MAIL_USERNAME }}>"
           subject: "❌ Pipeline Failed — Filesystem Scan | ${{ github.repository }}"
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
               <div style="background:linear-gradient(135deg,#da3633,#b91c1c);padding:28px 32px">
                 <h1 style="margin:0;font-size:22px;font-weight:700">❌ Pipeline Failed</h1>
@@ -165,8 +164,7 @@ jobs:
           to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
           from: "RapidBase CI <${{ secrets.MAIL_USERNAME }}>"
           subject: "❌ Pipeline Failed — ${{ matrix.service.name }} | ${{ github.repository }}"
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
               <div style="background:linear-gradient(135deg,#da3633,#b91c1c);padding:28px 32px">
                 <h1 style="margin:0;font-size:22px;font-weight:700">❌ Build Failed</h1>
@@ -218,8 +216,7 @@ jobs:
           to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
           from: "RapidBase CI <${{ secrets.MAIL_USERNAME }}>"
           subject: "✅ Pipeline Passed — ${{ github.repository }}"
-          content_type: text/html
-          body: |
+          html_body: |
             <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
               <div style="background:linear-gradient(135deg,#238636,#196127);padding:28px 32px">
                 <h1 style="margin:0;font-size:22px;font-weight:700">✅ Pipeline Passed</h1>
