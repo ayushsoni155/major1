@@ -28,57 +28,141 @@ RapidBase is a highly scalable, self-hosted, multi-tenant Backend-as-a-Service (
 
 ### System Flow Diagram
 ```mermaid
-graph TD
-    Client[Client / Browser] --> Nginx[Nginx API Gateway]
-    
-    Nginx --> Frontend[Next.js Frontend\nPort 3000]
-    Nginx --> Auth[Auth Service\nPort 4001]
-    Nginx --> Project[Project Service\nPort 4002]
-    Nginx --> DBService[Database Service\nPort 4003]
-    Nginx --> Analytics[Analytics Service\nPort 4004]
-    Nginx --> Postgrest[PostgREST\nPort 3001]
-    
-    Auth --> Postgres[(PostgreSQL)]
-    Project --> Postgres
-    DBService --> Postgres
-    Analytics --> Postgres
-    Postgrest --> Postgres
-    
-    Auth --> Cache[(Redis)]
-    Project --> Cache
+flowchart TD
+    Browser(["🌐 Client / Browser"])
+
+    subgraph Gateway ["Nginx API Gateway — Port 80"]
+        direction TB
+        NginxRoute["Route & Reverse Proxy"]
+        AuthRequest["auth_request — API Key Validation"]
+    end
+
+    subgraph Services ["Microservices Layer"]
+        direction LR
+        Frontend["Next.js Frontend\n:3000"]
+        Auth["Auth Service\n:4001"]
+        Project["Project Service\n:4002"]
+        DB["Database Service\n:4003"]
+        Analytics["Analytics Service\n:4004"]
+    end
+
+    subgraph Data ["Data Layer"]
+        direction LR
+        Postgres[("PostgreSQL\n:5432")]
+        Redis[("Redis\n:6379")]
+        PostgREST["PostgREST\n:3001"]
+    end
+
+    Browser -->|"HTTP/80"| NginxRoute
+    NginxRoute --> Frontend
+    NginxRoute -->|"POST /api/auth/*"| Auth
+    NginxRoute -->|"GET/POST /api/projects/*"| Project
+    NginxRoute -->|"POST /api/query/*"| DB
+    NginxRoute -->|"GET /api/analytics/*"| Analytics
+    NginxRoute -->|"x-api-key header"| AuthRequest
+    AuthRequest -->|"validate"| Project
+    AuthRequest -->|"proxy"| PostgREST
+
+    Auth -->|"users, sessions"| Postgres
+    Auth -->|"OTP, rate-limit, refresh tokens"| Redis
+    Project -->|"projects, members, keys, notifications"| Postgres
+    Project -->|"project list cache, API key cache"| Redis
+    DB -->|"query_history, audit_log"| Postgres
+    Analytics -->|"analytics_dashboards"| Postgres
+    PostgREST -->|"project schemas (REST)"| Postgres
+```
+
+### Use Case Diagram
+```mermaid
+flowchart LR
+    U(["👤 Authenticated User"])
+    A(["🔑 API Key Client"])
+    AD(["🛡️ Admin / Owner"])
+
+    subgraph Auth ["Authentication"]
+        UC1["Register & OTP Verify"]
+        UC2["Login / Logout"]
+        UC3["Forgot / Reset Password"]
+        UC4["Refresh JWT Token"]
+        UC5["Update Profile"]
+        UC6["Change Password"]
+        UC7["Delete Account"]
+    end
+
+    subgraph Projects ["Project Management"]
+        UC8["Create / List Projects"]
+        UC9["View / Update / Delete Project"]
+        UC10["Invite Members"]
+        UC11["Accept / Decline Invitation"]
+        UC12["Manage Member Roles"]
+        UC13["View Notifications (SSE)"]
+    end
+
+    subgraph Database ["Database Operations"]
+        UC14["Create / Alter / Drop Tables"]
+        UC15["Insert / Update / Delete / Read Rows"]
+        UC16["Execute Raw SQL"]
+        UC17["View Query History"]
+        UC18["View Audit Logs"]
+        UC19["Browse Schema Structure"]
+    end
+
+    subgraph Keys ["API Key Management"]
+        UC20["Generate API Key"]
+        UC21["List / Revoke API Keys"]
+    end
+
+    subgraph REST ["PostgREST Auto API"]
+        UC22["CRUD via REST (x-api-key)"]
+        UC23["Filter / Sort / Paginate"]
+    end
+
+    subgraph Analytics ["Analytics"]
+        UC24["View Table Stats"]
+        UC25["Build Charts"]
+        UC26["Save / Load Dashboard"]
+    end
+
+    U --> Auth
+    U --> Projects
+    U --> Database
+    U --> Keys
+    U --> Analytics
+    AD --> UC10
+    AD --> UC12
+    AD --> UC20
+    AD --> UC21
+    A --> REST
 ```
 
 ### ER Diagram (Core Entities)
 ```mermaid
 erDiagram
     users ||--o{ projects : "owns"
-    users ||--o{ project_members : "belongs to"
+    users ||--o{ project_members : "member of"
     users ||--o{ api_keys : "creates"
     users ||--o{ query_history : "executes"
     users ||--o{ audit_log : "performs"
     users ||--o{ notifications : "receives"
-    users ||--o{ project_invitations : "invites"
-    users ||--o{ project_invitations : "is invited"
-    
-    projects ||--o{ project_members : "has"
-    projects ||--o{ api_keys : "has"
-    projects ||--o{ query_history : "logs"
-    projects ||--o{ audit_log : "tracks"
-    projects ||--o{ project_invitations : "has"
-    projects ||--|| analytics_dashboards : "has"
+    users ||--o{ project_invitations : "invites as inviter"
+    users ||--o{ project_invitations : "receives as invitee"
+
+    projects ||--o{ project_members : "has members"
+    projects ||--o{ api_keys : "has keys"
+    projects ||--o{ query_history : "logs queries"
+    projects ||--o{ audit_log : "tracks actions"
+    projects ||--o{ project_invitations : "has invitations"
+    projects ||--|| analytics_dashboards : "has dashboard"
 
     users {
         uuid id PK
-        varchar email "UNIQUE"
-        varchar password_hash
+        varchar email "UNIQUE NOT NULL"
+        varchar password_hash "NOT NULL"
         varchar name
         text avatar_url
-        varchar role
-        boolean is_verified
-        varchar otp_code
-        timestamptz otp_expires_at
-        integer otp_attempts
-        boolean is_active
+        varchar role "DEFAULT user"
+        boolean is_verified "DEFAULT false"
+        boolean is_active "DEFAULT true"
         timestamptz last_login
         timestamptz created_at
         timestamptz updated_at
@@ -87,10 +171,10 @@ erDiagram
     projects {
         uuid project_id PK
         uuid owner_id FK
-        varchar project_name
+        varchar project_name "NOT NULL"
         text project_description
-        varchar schema_name "UNIQUE"
-        varchar project_status
+        varchar schema_name "UNIQUE NOT NULL"
+        varchar project_status "DEFAULT active"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -99,21 +183,21 @@ erDiagram
         uuid id PK
         uuid project_id FK
         uuid user_id FK
-        varchar role
+        varchar role "admin|editor|viewer"
         timestamptz invited_at
     }
 
     api_keys {
         uuid id PK
         uuid project_id FK
-        varchar key_name
-        varchar api_key "UNIQUE"
-        varchar key_prefix
-        text origin_url
-        jsonb permissions
-        boolean is_active
-        timestamptz last_used_at
         uuid created_by FK
+        varchar key_name "NOT NULL"
+        varchar api_key "UNIQUE NOT NULL"
+        varchar key_prefix "NOT NULL"
+        text origin_url
+        jsonb permissions "DEFAULT read"
+        boolean is_active "DEFAULT true"
+        timestamptz last_used_at
         timestamptz created_at
         timestamptz expires_at
     }
@@ -122,10 +206,10 @@ erDiagram
         uuid id PK
         uuid project_id FK
         uuid user_id FK
-        text query_text
-        varchar query_status
+        text query_text "NOT NULL"
+        varchar query_status "success|failed"
         integer execution_time_ms
-        integer rows_affected
+        integer rows_affected "DEFAULT 0"
         text error_message
         timestamptz created_at
     }
@@ -134,8 +218,8 @@ erDiagram
         uuid id PK
         uuid project_id FK
         uuid actor_id FK
-        varchar action_type
-        jsonb details
+        varchar action_type "NOT NULL"
+        jsonb details "DEFAULT {}"
         varchar ip_address
         timestamptz created_at
     }
@@ -143,11 +227,11 @@ erDiagram
     notifications {
         uuid id PK
         uuid user_id FK
-        varchar type
-        varchar title
+        varchar type "NOT NULL"
+        varchar title "NOT NULL"
         text message
-        jsonb data
-        boolean is_read
+        jsonb data "DEFAULT {}"
+        boolean is_read "DEFAULT false"
         timestamptz created_at
     }
 
@@ -155,104 +239,119 @@ erDiagram
         uuid id PK
         uuid project_id FK
         uuid inviter_id FK
-        varchar invitee_email
         uuid invitee_id FK
-        varchar role
-        varchar token "UNIQUE"
-        varchar status
+        varchar invitee_email "NOT NULL"
+        varchar role "DEFAULT viewer"
+        varchar token "UNIQUE NOT NULL"
+        varchar status "pending|accepted|declined"
         timestamptz created_at
-        timestamptz expires_at
+        timestamptz expires_at "DEFAULT +7 days"
     }
 
     analytics_dashboards {
         uuid id PK
-        uuid project_id FK
-        jsonb layout
-        jsonb widgets
+        uuid project_id FK "UNIQUE"
+        jsonb layout "DEFAULT []"
+        jsonb widgets "DEFAULT []"
         timestamptz updated_at
     }
 ```
+
+> **Note:** OTP codes and refresh tokens are stored in **Redis** (not in PostgreSQL) for fast access and automatic TTL expiry — there are no `otp_code` / `otp_attempts` columns on the `users` table.
 
 ## Comprehensive API Documentation
 
 All requests interact with the platform through the unified Nginx API Gateway. Authentication is strictly handled via `Authorization: Bearer <token>` or HTTP-only cookies assigned during Login. All successful responses generally follow a `{ status, data, message }` envelope convention.
 
 ### 1. Authentication Service (`/api/auth/*`)
-Manages user lifecycle, tokens, and profiles. Limits apply via Redis (e.g., 20 req/15min).
+Manages user lifecycle, tokens, and profiles. Rate limits enforced via Redis (20 req/15 min for auth, 10 OTP req/hr).
 
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/auth/register` | Body: `{ "email", "password", "name" }` | `201` - `{ "status", "data": { "userId" }, "message" }` | Register new user, sends OTP |
-| `POST` | `/api/auth/verify-otp` | Body: `{ "email", "otp" }` | `200` - `{ "status", "data": { "user", "token", "refreshToken" } }` | Verify OTP to login |
-| `POST` | `/api/auth/resend-otp` | Body: `{ "email" }` | `200` - `{ "status", "data": null, "message" }` | Resend OTP |
-| `POST` | `/api/auth/login` | Body: `{ "email", "password" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Login user |
-| `POST` | `/api/auth/refresh` | Body: `{ "refreshToken" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Refresh JWT tokens |
-| `POST` | `/api/auth/logout` | None (Requires active session) | `200` - `{ "status", "data": null, "message" }` | Logout user |
-| `GET` | `/api/auth/me` | Header: `Authorization: Bearer <token>` | `200` - `{ "status", "data": { "id", "email", "name", "verified" } }` | Get current user |
-| `PATCH` | `/api/auth/profile` | Body: `{ "name" }` | `200` - `{ "status", "data": { "id", "name" }, "message" }` | Update profile |
-| `POST` | `/api/auth/change-password` | Body: `{ "oldPassword", "newPassword" }` | `200` - `{ "status", "data": null, "message" }` | Change password |
-| `DELETE` | `/api/auth/account` | None | `200` - `{ "status", "data": null, "message" }` | Delete account permanently |
+| Method | Endpoint | Auth Required | Input | Success Output | Description |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | ❌ | Body: `{ "email", "password", "name" }` | `201` - `{ "status", "data": { "userId" }, "message" }` | Register new user, sends OTP to email |
+| `POST` | `/api/auth/verify-otp` | ❌ | Body: `{ "email", "otp" }` | `200` - `{ "status", "data": { "user", "token", "refreshToken" } }` | Verify OTP & receive JWT |
+| `POST` | `/api/auth/resend-otp` | ❌ | Body: `{ "email" }` | `200` - `{ "status", "data": null, "message" }` | Resend OTP (10/hr limit) |
+| `POST` | `/api/auth/login` | ❌ | Body: `{ "email", "password" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Login with email + password |
+| `POST` | `/api/auth/refresh` | ❌ | Body: `{ "refreshToken" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Refresh JWT tokens |
+| `POST` | `/api/auth/logout` | ❌ | None | `200` - `{ "status", "data": null, "message" }` | Logout & invalidate refresh token |
+| `POST` | `/api/auth/forgot-password` | ❌ | Body: `{ "email" }` | `200` - `{ "status", "data": null, "message" }` | Send password reset link |
+| `POST` | `/api/auth/reset-password` | ❌ | Body: `{ "token", "newPassword" }` | `200` - `{ "status", "data": null, "message" }` | Reset password with token |
+| `GET` | `/api/auth/me` | ✅ | Header: `Authorization: Bearer <token>` | `200` - `{ "status", "data": { "id", "email", "name", "is_verified" } }` | Get current user profile |
+| `PATCH` | `/api/auth/profile` | ✅ | Body: `{ "name", "avatar_url" }` | `200` - `{ "status", "data": { "id", "name" }, "message" }` | Update profile |
+| `POST` | `/api/auth/change-password` | ✅ | Body: `{ "oldPassword", "newPassword" }` | `200` - `{ "status", "data": null, "message" }` | Change password |
+| `DELETE` | `/api/auth/account` | ✅ | None | `200` - `{ "status", "data": null, "message" }` | Permanently delete account |
 
 ### 2. Project Service (`/api/projects/*` & `/api/schema/*`)
-Handles workspaces, schemas, table configuration, RBAC members, and keys. Requires Auth.
+Handles workspaces, schemas, table configuration, RBAC members, invitations, notifications, and API keys. All routes require `Authorization: Bearer <token>` unless noted.
 
 #### Projects
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/projects/` | Header: `Authorization: Bearer <token>` | `200` - `{ "status", "data": [ { "id", "name", "role", "createdAt" } ] }` | List projects |
-| `POST` | `/api/projects/` | Body: `{ "name" }` | `201` - `{ "status", "data": { "id" }, "message" }` | Create project |
-| `GET` | `/api/projects/:projectId` | Param: `projectId` | `200` - `{ "status", "data": { "id", "name", "ownerId", "schema" } }` | Get project details |
-| `PATCH` | `/api/projects/:projectId` | Body: `{ "name" }` | `200` - `{ "status", "data": { ... }, "message" }` | Update project |
-| `DELETE` | `/api/projects/:projectId` | Param: `projectId` | `200` - `{ "status", "data": null, "message" }` | Delete project |
+| Method | Endpoint | Role Required | Input | Success Output | Description |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `GET` | `/api/projects/` | any | — | `200` - `[ { "id", "name", "role", "createdAt" } ]` | List my projects (cached in Redis) |
+| `POST` | `/api/projects/` | any | Body: `{ "name", "description"? }` | `201` - `{ "id", "schema_name" }` | Create project + auto DB schema |
+| `GET` | `/api/projects/:projectId` | any | Param: `projectId` | `200` - `{ "id", "name", "ownerId", "schema" }` | Get project details |
+| `PATCH` | `/api/projects/:projectId` | admin | Body: `{ "name"?, "description"? }` | `200` - updated project | Update project |
+| `DELETE` | `/api/projects/:projectId` | admin | Param: `projectId` | `200` - `{ "message" }` | Delete project + drops schema |
+| `GET` | `/api/projects/validate-api-key` | — | Header: `x-api-key` | `200` / `401` | Internal Nginx auth_request endpoint |
 
 #### Schema & Tables
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/schema/:projectId` | Param: `projectId` | `200` - `{ "status", "data": { "schema": [...] } }` | Get full schema |
-| `GET` | `/api/projects/:projectId/tables` | Param: `projectId` | `200` - `{ "status", "data": [ "users", "products" ] }` | List tables |
-| `POST` | `/api/projects/:projectId/tables` | Body: `{ "tableName", "columns": [...] }` | `201` - `{ "status", "data": null, "message" }` | Create table |
-| `GET` | `/api/projects/:projectId/tables/:tableName` | Params: `projectId`, `tableName` | `200` - `{ "status", "data": { "columns": [...] } }` | Get table details |
-| `PATCH` | `/api/projects/:projectId/tables/:tableName` | Body: `{ "actions": [...] }` | `200` - `{ "status", "data": null, "message" }` | Alter table |
-| `DELETE` | `/api/projects/:projectId/tables/:tableName` | Params: `projectId`, `tableName` | `200` - `{ "status", "data": null, "message" }` | Drop table |
+| Method | Endpoint | Role Required | Input | Success Output | Description |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `GET` | `/api/schema/:projectId` | any | Param: `projectId` | `200` - `{ "schema": [ { "table", "columns" } ] }` | Full schema structure |
+| `GET` | `/api/projects/:projectId/tables` | any | Param: `projectId` | `200` - `[ "tableName", ... ]` | List tables in project schema |
+| `POST` | `/api/projects/:projectId/tables` | admin/editor | Body: `{ "tableName", "columns": [ { "name", "type", "constraints" } ] }` | `201` - `{ "message" }` | Create table |
+| `GET` | `/api/projects/:projectId/tables/:tableName` | any | Params | `200` - `{ "columns": [ { "name", "type", "nullable" } ] }` | Get table column details |
+| `PATCH` | `/api/projects/:projectId/tables/:tableName` | admin/editor | Body: `{ "actions": [ { "type", "column", ... } ] }` | `200` - `{ "message" }` | Alter table (add/drop/rename columns) |
+| `DELETE` | `/api/projects/:projectId/tables/:tableName` | admin | Params | `200` - `{ "message" }` | Drop table |
 
-#### Table Data (UI CRUD Actions)
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/projects/:projectId/tables/:tableName/data` | Query: `?limit=50&offset=0` | `200` - `{ "status", "data": [ { "id": 1, "col": "val" } ] }` | Get rows |
-| `POST` | `/api/projects/:projectId/tables/:tableName/data` | Body: `{ "row": { ... } }` | `201` - `{ "status", "data": { "id": 1 }, "message" }` | Insert row |
-| `PATCH` | `/api/projects/:projectId/tables/:tableName/rows` | Body: `{ "id", "updates": { ... } }` | `200` - `{ "status", "data": null, "message" }` | Update row |
-| `DELETE` | `/api/projects/:projectId/tables/:tableName/rows` | Option: Query or Body `{ "id" }` | `200` - `{ "status", "data": null, "message" }` | Delete row |
+#### Table Data (UI CRUD)
+| Method | Endpoint | Role Required | Input | Success Output | Description |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `GET` | `/api/projects/:projectId/tables/:tableName/data` | any | Query: `?limit=50&offset=0` | `200` - `[ { ...row } ]` | Paginated row read |
+| `POST` | `/api/projects/:projectId/tables/:tableName/data` | admin/editor | Body: `{ "row": { ... } }` | `201` - inserted row | Insert row |
+| `PATCH` | `/api/projects/:projectId/tables/:tableName/rows` | admin/editor | Body: `{ "id", "updates": { ... } }` | `200` - `{ "message" }` | Update row by id |
+| `DELETE` | `/api/projects/:projectId/tables/:tableName/rows` | admin/editor | Body or Query: `{ "id" }` | `200` - `{ "message" }` | Delete row by id |
 
 #### Members & Roles
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/projects/:projectId/members` | Param: `projectId` | `200` - `{ "status", "data": [ { "userId", "email", "role" } ] }` | List members |
-| `POST` | `/api/projects/:projectId/members` | Body: `{ "email", "role" }` | `201` - `{ "status", "data": null, "message" }` | Invite member |
-| `PATCH` | `/api/projects/:projectId/members/:memberId` | Body: `{ "role" }` | `200` - `{ "status", "message" }` | Update role |
-| `DELETE` | `/api/projects/:projectId/members/:memberId` | Params: `projectId`, `memberId` | `200` - `{ "status", "message" }` | Remove member |
+| Method | Endpoint | Role Required | Input | Success Output | Description |
+| :--- | :--- | :---: | :--- | :--- | :--- |
+| `GET` | `/api/projects/:projectId/members` | any | — | `200` - `[ { "userId", "email", "role" } ]` | List project members |
+| `POST` | `/api/projects/:projectId/members` | admin | Body: `{ "email", "role" }` | `201` - `{ "message" }` | Invite member (sends email) |
+| `PATCH` | `/api/projects/:projectId/members/:memberId` | admin | Body: `{ "role" }` | `200` - `{ "message" }` | Update member role |
+| `DELETE` | `/api/projects/:projectId/members/:memberId` | admin | Params | `200` - `{ "message" }` | Remove member |
 
-#### Invitations & Notifications
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/projects/invitations/mine` | None | `200` - `{ "status", "data": [ { "projectId", "role", "token" } ] }` | List my invites |
-| `POST` | `/api/projects/invitations/accept/:token` | Param: `token` | `200` - `{ "status", "data": { "projectId" }, "message" }` | Accept invite |
-| `POST` | `/api/projects/invitations/decline/:token` | Param: `token` | `200` - `{ "status", "message" }` | Decline invite |
-| `GET` | `/api/projects/notifications` | None | `200` - `{ "status", "data": [ { "id", "title", "message", "isRead" } ] }` | List notifications |
+#### Invitations
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/projects/invitations/mine` | List all pending invitations for the logged-in user |
+| `POST` | `/api/projects/invitations/accept/:token` | Accept an invitation by token |
+| `POST` | `/api/projects/invitations/decline/:token` | Decline an invitation by token |
+| `GET` | `/api/projects/:projectId/invitations` | *(admin)* List all pending invitations for a project |
+| `POST` | `/api/projects/:projectId/invitations` | *(admin)* Send an invitation email to a user |
+
+#### Notifications
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/projects/notifications` | List all notifications for the current user |
+| `GET` | `/api/projects/notifications/unread-count` | Get count of unread notifications |
+| `GET` | `/api/projects/notifications/stream` | **SSE stream** — real-time notification push (Redis Pub/Sub) |
+| `PATCH` | `/api/projects/notifications/mark-all-read` | Mark all notifications as read |
+| `PATCH` | `/api/projects/notifications/:notificationId/read` | Mark a single notification as read |
 
 #### API Keys
+| Method | Endpoint | Role Required | Description |
+| :--- | :--- | :---: | :--- |
+| `GET` | `/api/projects/:projectId/keys` | any | List API keys (prefix only, not full key) |
+| `POST` | `/api/projects/:projectId/keys` | admin | Generate a new API key (returned once, hashed in DB) |
+| `DELETE` | `/api/projects/:projectId/keys/:keyId` | admin | Revoke an API key |
+
+### 3. Database Service (`/api/query/*`)
+
 | Method | Endpoint | Input | Success Output | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/projects/:projectId/keys` | Param: `projectId` | `200` - `{ "status", "data": [ { "id", "createdAt", "lastUsedAt" } ] }` | List API keys |
-| `POST` | `/api/projects/:projectId/keys` | None | `201` - `{ "status", "data": { "key" }, "message" }` | Create API key |
-| `DELETE` | `/api/projects/:projectId/keys/:keyId` | Params: `projectId`, `keyId` | `200` - `{ "status", "message" }` | Revoke API key |
-
-### 3. Database Service (`/api/query/*` & `/api/auditlog`)
-
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/query/execute` | Body: `{ "projectId", "query" }` | `200` - `{ "status", "data": { "rows", "rowCount", "executionTimeMs" } }` | Execute SQL query |
-| `GET` | `/api/query/history` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ { "query", "executedBy", "timestamp" } ] }` | Query history |
-| `GET` | `/api/auditlog` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ { "action", "details" } ] }` | Audit log |
+| `POST` | `/api/query/execute` | Body: `{ "projectId", "query" }` | `200` - `{ "rows", "rowCount", "executionTimeMs" }` | Execute raw SQL against project schema |
+| `GET` | `/api/query/history` | Query: `?projectId=uuid` | `200` - `[ { "query_text", "query_status", "execution_time_ms", "created_at" } ]` | Query history for a project |
+| `GET` | `/api/query/audit-logs` | Query: `?projectId=uuid` | `200` - `[ { "action_type", "details", "actor_id", "ip_address", "created_at" } ]` | Project audit log |
 
 ### 4. Analytics Service (`/api/analytics/*`)
 
