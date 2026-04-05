@@ -3,7 +3,6 @@ const crypto = require('crypto');
 const { sendInviteEmail, sendInviteAcceptedEmail, sendInviteDeclinedEmail, FRONTEND_URL } = require('../utils/mailer');
 const { createNotification } = require('./notificationController');
 
-// SEND INVITATION (creates pending invite, sends email, creates notification)
 const sendInvitation = async (req, res, next) => {
   const { projectId } = req.params;
   const { email, role } = req.body;
@@ -84,7 +83,6 @@ const sendInvitation = async (req, res, next) => {
   }
 };
 
-// ACCEPT INVITATION (via token)
 const acceptInvitation = async (req, res, next) => {
   const { token } = req.params;
   const userId = req.user?.id;
@@ -162,7 +160,6 @@ const acceptInvitation = async (req, res, next) => {
   }
 };
 
-// DECLINE INVITATION (via token)
 const declineInvitation = async (req, res, next) => {
   const { token } = req.params;
 
@@ -224,7 +221,6 @@ const declineInvitation = async (req, res, next) => {
   }
 };
 
-// GET pending invitations for current user
 const getMyInvitations = async (req, res, next) => {
   try {
     const { rows } = await db.query(
@@ -240,7 +236,6 @@ const getMyInvitations = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET pending invitations sent from a project (for members page)
 const getProjectInvitations = async (req, res, next) => {
   const { projectId } = req.params;
   try {

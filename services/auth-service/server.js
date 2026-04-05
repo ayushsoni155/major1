@@ -7,7 +7,6 @@ const authRoutes = require('./src/routes/authRoutes');
 
 const app = express();
 
-// ---- CORS: allow frontend origin with credentials ----
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost',
   'http://localhost:3000',
@@ -28,22 +27,17 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
 }));
 
-// ---- Body parsers ----
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ---- Cookie parser (signed cookies) ----
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
-// ---- Routes ----
 app.use('/auth', authRoutes);
 
-// ---- Health check ----
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'auth-service' });
 });
 
-// ---- Global error handler ----
 app.use((err, req, res, next) => {
   console.error('[Auth Service] Unhandled error:', err);
   res.status(500).json({

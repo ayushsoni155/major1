@@ -4,7 +4,6 @@ const { validationResult } = require('express-validator');
 const { generateSchemaName } = require('../utils/sanitize');
 const { logAction, ACTION_TYPES } = require('../utils/auditLogger');
 
-// ---- Redis cache TTLs ----
 const API_KEY_CACHE_TTL = 300; // 5 minutes
 const PROJECT_LIST_CACHE_TTL = 600; // 10 minutes
 
@@ -18,7 +17,6 @@ const getProjectWithRole = async (projectId, userId) => {
   return rows[0] || null;
 };
 
-// CREATE PROJECT
 const createProject = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -62,7 +60,6 @@ const createProject = async (req, res, next) => {
   }
 };
 
-// GET USER PROJECTS (cached in Redis)
 const getUserProjects = async (req, res, next) => {
   try {
     const cacheKey = `projects:user:${req.user.id}`;
@@ -86,7 +83,6 @@ const getUserProjects = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-// GET PROJECT DETAILS
 const getProjectDetails = async (req, res, next) => {
   try {
     const project = await getProjectWithRole(req.params.projectId, req.user.id);
@@ -95,7 +91,6 @@ const getProjectDetails = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-// UPDATE PROJECT
 const updateProject = async (req, res, next) => {
   const { projectId } = req.params;
   const { name, status, description } = req.body;
@@ -124,7 +119,6 @@ const updateProject = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-// DELETE PROJECT
 const deleteProject = async (req, res, next) => {
   const client = await db.pool.connect();
   try {
@@ -147,7 +141,6 @@ const deleteProject = async (req, res, next) => {
   } finally { client.release(); }
 };
 
-// VALIDATE API KEY (used by Nginx auth_request) — cached in Redis
 const validateApiKey = async (req, res) => {
   const apiKey = req.headers['x-api-key'];
   const origin = req.headers['x-origin'] || '';

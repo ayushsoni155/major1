@@ -10,7 +10,6 @@ const generateApiKey = () => {
   return { fullKey: `rb_${key}`, prefix };
 };
 
-// CREATE API KEY
 const createApiKey = async (req, res, next) => {
   const { projectId } = req.params;
   const { key_name, origin_url, permissions } = req.body;
@@ -50,7 +49,7 @@ const createApiKey = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET API KEYS (masked) — BUG-9 FIX: verify user has project access first
+// BUG-9 FIX: verify user has project access first
 const getApiKeys = async (req, res, next) => {
   const { projectId } = req.params;
   const userId = req.user.id;
@@ -78,7 +77,6 @@ const getApiKeys = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE API KEY
 const deleteApiKey = async (req, res, next) => {
   const { projectId, keyId } = req.params;
   const userId = req.user.id;

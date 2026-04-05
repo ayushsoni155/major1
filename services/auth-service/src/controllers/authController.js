@@ -5,7 +5,6 @@ const redis = require('../config/redis');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 const { sendOtpEmail, sendPasswordResetEmail } = require('../utils/mailer');
 
-// ---- Cookie config ----
 const isHttps = process.env.FRONTEND_URL?.startsWith('https://');
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -16,7 +15,6 @@ const COOKIE_OPTS = {
 const ACCESS_COOKIE_MAX_AGE  = 15 * 60 * 1000;        // 15 minutes
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// ---- Redis key helpers ----
 const OTP_TTL      = 600; // 10 minutes
 const COOLDOWN_TTL = 60;  // 60 seconds
 const MAX_ATTEMPTS = 5;
@@ -86,9 +84,6 @@ async function clearOtpFromRedis(email) {
   await redis.del(otpKey(email), attemptsKey(email), cooldownKey(email));
 }
 
-// ============================================================
-// REGISTER — creates unverified user, sends OTP email
-// ============================================================
 const register = async (req, res) => {
   try {
     const { email, password, name } = req.body;
@@ -155,9 +150,6 @@ const register = async (req, res) => {
   }
 };
 
-// ============================================================
-// VERIFY OTP — marks user verified, sets cookie session
-// ============================================================
 const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -226,9 +218,6 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-// ============================================================
-// RESEND OTP
-// ============================================================
 const resendOtp = async (req, res) => {
   try {
     const { email } = req.body;
@@ -270,9 +259,6 @@ const resendOtp = async (req, res) => {
   }
 };
 
-// ============================================================
-// LOGIN — validates credentials, sets cookie session
-// ============================================================
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -330,17 +316,11 @@ const login = async (req, res) => {
   }
 };
 
-// ============================================================
-// LOGOUT — clears cookies
-// ============================================================
 const logout = (req, res) => {
   clearAuthCookies(res);
   return res.status(200).json({ status: 200, data: null, message: 'Logged out successfully' });
 };
 
-// ============================================================
-// UPDATE PROFILE — name and/or avatar_url
-// ============================================================
 const updateProfile = async (req, res) => {
   try {
     const { name, avatar_url } = req.body;
@@ -363,9 +343,6 @@ const updateProfile = async (req, res) => {
   }
 };
 
-// ============================================================
-// CHANGE PASSWORD
-// ============================================================
 const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -388,9 +365,6 @@ const changePassword = async (req, res) => {
   }
 };
 
-// ============================================================
-// DELETE ACCOUNT
-// ============================================================
 const deleteAccount = async (req, res) => {
   try {
     const { password } = req.body;
@@ -412,9 +386,6 @@ const deleteAccount = async (req, res) => {
 };
 
 
-// ============================================================
-// GET ME — reads user from cookie JWT
-// ============================================================
 const getMe = async (req, res) => {
   try {
     const result = await db.query(
@@ -433,9 +404,6 @@ const getMe = async (req, res) => {
   }
 };
 
-// ============================================================
-// FORGOT PASSWORD — sends OTP email for password reset
-// ============================================================
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -485,9 +453,6 @@ const forgotPassword = async (req, res) => {
   }
 };
 
-// ============================================================
-// RESET PASSWORD — verifies OTP and sets new password
-// ============================================================
 const resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -555,9 +520,6 @@ const resetPassword = async (req, res) => {
   }
 };
 
-// ============================================================
-// REFRESH TOKEN — rotates tokens via cookie
-// ============================================================
 const refreshToken = async (req, res) => {
   try {
     const token = req.cookies?.refresh_token;

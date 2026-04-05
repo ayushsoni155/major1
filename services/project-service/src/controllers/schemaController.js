@@ -10,7 +10,6 @@ const getProjectWithRole = async (projectId, userId) => {
   return rows[0] || null;
 };
 
-// GET SCHEMA STRUCTURE (for ReactFlow visualization)
 const getSchemaStructure = async (req, res, next) => {
   const { projectId } = req.params;
   const userId = req.user.id;

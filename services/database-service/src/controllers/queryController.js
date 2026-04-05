@@ -1,11 +1,9 @@
 const db = require('../config/db');
 const redis = require('../config/redis');
 
-// ============================================
 // Schema names that users must NEVER be able to prefix their queries with.
 // Our search_path enforcement already handles this at the DB level, but we
 // add an explicit application-layer block as defence-in-depth.
-// ============================================
 const BLOCKED_SCHEMA_PREFIXES = [
   'public',
   'pg_catalog',
@@ -31,10 +29,6 @@ const FORBIDDEN_KEYWORDS = [
   // Prevent overriding the enforced search_path or statement_timeout
   'SET SEARCH_PATH', 'SET LOCAL SEARCH_PATH',
 ];
-
-// ============================================
-// Helpers
-// ============================================
 
 /** Fetch the project's schema name — cached in Redis for 10 min. */
 const getProjectSchema = async (projectId) => {
@@ -107,9 +101,6 @@ const detectForbiddenSchemaRef = (sql, ownSchemaName) => {
   return null;
 };
 
-// ============================================
-// EXECUTE SQL QUERY
-// ============================================
 const executeQuery = async (req, res, next) => {
   const { query } = req.body;
   const userId    = req.user.id;
@@ -261,9 +252,6 @@ const executeQuery = async (req, res, next) => {
   }
 };
 
-// ============================================
-// GET QUERY HISTORY
-// ============================================
 const getQueryHistory = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   const userId    = req.user.id;
@@ -301,9 +289,6 @@ const getQueryHistory = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ============================================
-// GET AUDIT LOGS
-// ============================================
 const getAuditLogs = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   const userId    = req.user.id;

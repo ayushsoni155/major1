@@ -50,7 +50,6 @@ const createEnumTypes = async (client, columns, schemaName) => {
   }
 };
 
-// CREATE TABLE
 const createTable = async (req, res, next) => {
   const { projectId } = req.params;
   const { tableName, columns } = req.body;
@@ -86,7 +85,6 @@ const createTable = async (req, res, next) => {
   finally { client.release(); }
 };
 
-// GET PROJECT TABLES
 const getProjectTables = async (req, res, next) => {
   const { projectId } = req.params;
   const userId = req.user.id;
@@ -105,7 +103,6 @@ const getProjectTables = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET TABLE DETAILS
 const getTableDetails = async (req, res, next) => {
   // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
   const { projectId, tableName } = req.params;
@@ -155,7 +152,6 @@ const getTableDetails = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET TABLE DATA (rows) with sort, search, filter
 const getTableData = async (req, res, next) => {
   const { projectId, tableName } = req.params;
   const { page = 1, limit = 50, sortBy, sortOrder = 'asc', search } = req.query;
@@ -199,7 +195,6 @@ const getTableData = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// INSERT ROW
 const insertRow = async (req, res, next) => {
   // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
   const { projectId, tableName } = req.params;
@@ -246,7 +241,6 @@ const insertRow = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// UPDATE ROW
 const updateRow = async (req, res, next) => {
   // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
   const { projectId, tableName } = req.params;
@@ -269,7 +263,6 @@ const updateRow = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE ROW
 const deleteRow = async (req, res, next) => {
   // BUG FIX: use tableName (was incorrectly tableId after BUG-2 route param rename)
   const { projectId, tableName } = req.params;
@@ -287,7 +280,7 @@ const deleteRow = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// DELETE TABLE — BUG-2 FIX: read tableName from params, not body
+// BUG-2 FIX: read tableName from params, not body
 const deleteTable = async (req, res, next) => {
   const { projectId, tableName } = req.params;
   const userId = req.user.id;
@@ -307,7 +300,7 @@ const deleteTable = async (req, res, next) => {
   finally { client.release(); }
 };
 
-// ALTER TABLE — BUG-3 FIX: new endpoint for schema modifications
+// BUG-3 FIX: new endpoint for schema modifications
 // Supports: ADD COLUMN, DROP COLUMN, RENAME COLUMN, SET DEFAULT, DROP DEFAULT
 const alterTable = async (req, res, next) => {
   const { projectId, tableName } = req.params;

@@ -1,7 +1,6 @@
 const db = require('../config/db');
 const redis = require('../config/redis');
 
-// GET available tables for a project
 const getTables = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   if (!projectId) return res.status(400).json({ status: 400, data: null, message: 'X-Project-ID required' });
@@ -19,7 +18,6 @@ const getTables = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET columns for a specific table
 const getTableColumns = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   const { tableName } = req.params;
@@ -38,7 +36,6 @@ const getTableColumns = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET aggregated analytics data
 const getChartData = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   const { tableName, xField, yField, aggregation = 'COUNT', limit = 50 } = req.query;
@@ -80,7 +77,6 @@ const getChartData = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET table stats overview
 const getTableStats = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   if (!projectId) return res.status(400).json({ status: 400, data: null, message: 'X-Project-ID required' });
@@ -113,7 +109,6 @@ const getTableStats = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// SAVE dashboard layout + widgets for a project (upsert)
 const saveDashboard = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   const { layout, widgets } = req.body;
@@ -135,7 +130,6 @@ const saveDashboard = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// GET saved dashboard for a project
 const getDashboard = async (req, res, next) => {
   const projectId = req.headers['x-project-id'];
   if (!projectId) return res.status(400).json({ status: 400, data: null, message: 'X-Project-ID required' });

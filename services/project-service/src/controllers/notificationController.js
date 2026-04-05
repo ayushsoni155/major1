@@ -2,20 +2,13 @@ const db = require('../config/db');
 const redis = require('../config/redis');
 const Redis = require('ioredis');
 
-// ---- Redis Pub/Sub ----
-// We need a SEPARATE Redis client for subscribing (ioredis requirement:
-// a client in subscriber mode cannot run other commands).
+// Separate Redis client for subscribing — ioredis requires a dedicated client in subscriber mode
 const redisSub = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 redisSub.on('error', (err) => console.error('[Notifications] Redis sub error:', err.message));
 
-// ---- Constants ----
 const UNREAD_KEY_PREFIX = 'notifications:unread:';
 const CHANNEL_PREFIX    = 'notify:user:';
 const SSE_KEEPALIVE_MS  = 25_000; // 25s ping to prevent proxy timeout
-
-// ============================================================
-// Helper: Unread count cache
-// ============================================================
 
 /** Get cached unread count, or compute from DB and cache it */
 const getUnreadCountCached = async (userId) => {
@@ -33,9 +26,6 @@ const getUnreadCountCached = async (userId) => {
   return count;
 };
 
-// ============================================================
-// GET NOTIFICATIONS for current user
-// ============================================================
 const getNotifications = async (req, res, next) => {
   try {
     const { rows } = await db.query(
@@ -46,9 +36,7 @@ const getNotifications = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ============================================================
-// GET UNREAD COUNT (cached in Redis)
-// ============================================================
+// cached in Redis
 const getUnreadCount = async (req, res, next) => {
   try {
     const count = await getUnreadCountCached(req.user.id);
@@ -56,9 +44,6 @@ const getUnreadCount = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ============================================================
-// MARK ONE AS READ
-// ============================================================
 const markAsRead = async (req, res, next) => {
   const { notificationId } = req.params;
   try {
@@ -78,9 +63,6 @@ const markAsRead = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ============================================================
-// MARK ALL AS READ
-// ============================================================
 const markAllRead = async (req, res, next) => {
   try {
     await db.query(
@@ -93,9 +75,7 @@ const markAllRead = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ============================================================
-// Helper: Create notification + publish to Redis Pub/Sub
-// ============================================================
+// Creates notification in DB, increments unread count cache, and pushes real-time event via Redis Pub/Sub
 const createNotification = async (client, { userId, type, title, message, data }) => {
   // 1. Persist to DB (durable storage for history)
   const { rows } = await client.query(
@@ -125,14 +105,10 @@ const createNotification = async (client, { userId, type, title, message, data }
   );
 };
 
-// ============================================================
-// SSE STREAM — real-time notifications via Server-Sent Events
-// ============================================================
 const streamNotifications = async (req, res) => {
   const userId = req.user.id;
   const channel = `${CHANNEL_PREFIX}${userId}`;
 
-  // ---- SSE Headers ----
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -142,11 +118,9 @@ const streamNotifications = async (req, res) => {
     'Access-Control-Allow-Credentials': 'true',
   });
 
-  // ---- Send initial unread count ----
   const unreadCount = await getUnreadCountCached(userId);
   res.write(`event: unread_count\ndata: ${JSON.stringify({ count: unreadCount })}\n\n`);
 
-  // ---- Subscribe to user's notification channel ----
   const onMessage = (ch, message) => {
     if (ch === channel) {
       try {
@@ -169,12 +143,11 @@ const streamNotifications = async (req, res) => {
 
   redisSub.on('message', onMessage);
 
-  // ---- Keepalive ping to prevent proxy/client timeout ----
+  // keepalive ping to prevent proxy/client timeout
   const keepalive = setInterval(() => {
     res.write(`:keepalive\n\n`);
   }, SSE_KEEPALIVE_MS);
 
-  // ---- Cleanup on client disconnect ----
   req.on('close', () => {
     clearInterval(keepalive);
     redisSub.unsubscribe(channel).catch(() => {});

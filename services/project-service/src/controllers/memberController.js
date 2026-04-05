@@ -1,6 +1,5 @@
 const db = require('../config/db');
 
-// GET MEMBERS
 const getMembers = async (req, res, next) => {
   const { projectId } = req.params;
   try {
@@ -16,14 +15,13 @@ const getMembers = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// INVITE MEMBER — delegates to the invitation flow (pending invite + email notification)
+// delegates to the invitation flow (pending invite + email notification)
 const inviteMember = async (req, res, next) => {
   // Forward to sendInvitation which handles the full invitation workflow
   const { sendInvitation } = require('./invitationController');
   return sendInvitation(req, res, next);
 };
 
-// UPDATE MEMBER ROLE
 const updateMemberRole = async (req, res, next) => {
   const { projectId, memberId } = req.params;
   const { role } = req.body;
@@ -40,7 +38,6 @@ const updateMemberRole = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// REMOVE MEMBER
 const removeMember = async (req, res, next) => {
   const { projectId, memberId } = req.params;
   try {
