@@ -1,23 +1,19 @@
 # ---- Stage 1: Install dependencies ----
-FROM node:20-alpine AS deps
+FROM node:20-bookworm-slim AS deps
 WORKDIR /app
-RUN apk add --no-cache dumb-init
 COPY package*.json ./
 RUN npm ci --omit=dev
 
 # ---- Stage 2: Production runner ----
-FROM node:20-alpine AS runner
+FROM gcr.io/distroless/nodejs20-debian12 AS runner
 WORKDIR /app
-COPY --from=deps /usr/bin/dumb-init /usr/bin/dumb-init
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Run as non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
-USER nodejs
+USER nonroot
 
 EXPOSE 4001
 ENV NODE_ENV=production
 
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "server.js"]
+CMD ["server.js"]
