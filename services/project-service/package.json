@@ -2,6 +2,8 @@
   "name": "project-service",
   "version": "1.0.0",
   "description": "RapidBase Project Management Service",
+  "license": "MIT",
+  "author": "Ayush Soni",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

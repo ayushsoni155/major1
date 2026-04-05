@@ -2,6 +2,8 @@
   "name": "auth-service",
   "version": "1.0.0",
   "description": "RapidBase Authentication Service — OTP email verification + cookie sessions",
+  "license": "MIT",
+  "author": "Ayush Soni",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

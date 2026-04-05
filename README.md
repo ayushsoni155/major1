@@ -392,21 +392,239 @@ await fetch(`${API_URL}/users?id=eq.${newUser[0].id}`, {
 | `404` | Table not found |
 | `409` | Unique constraint violation |
 
-## Installation & Setup
-Docker Compose orchestrates the entire application natively. 
+## Installation & Local Setup
 
-1. **Clone & Configure:**
+Docker Compose orchestrates the entire application. Follow these steps to get up and running locally in minutes.
+
+### Prerequisites
+
+| Tool | Minimum Version | Purpose |
+|------|----------------|---------|
+| Docker | 24.x | Container runtime |
+| Docker Compose | v2.x | Multi-container orchestration |
+| Git | 2.x | Source control |
+| (Optional) Terraform | 1.7+ | AWS infrastructure provisioning |
+| (Optional) AWS CLI | 2.x | AWS credential management |
+
+### 1. Clone the Repository
+
 ```bash
-git clone <repository_url>
+git clone https://github.com/ayushsoni1010/rapidbase.git
 cd rapidbase
+```
+
+### 2. Configure Environment Variables
+
+```bash
 cp .env.example .env
 ```
-*(Define database credentials, secure JWT/Session secrets, and SMTP setups in your `.env`)*
 
-2. **Boot Platform:**
+Open `.env` and fill in all required values:
+
+| Variable | Description |
+|----------|------------|
+| `POSTGRES_PASSWORD` | Strong password for PostgreSQL (min 32 chars) |
+| `JWT_SECRET` | Random string, min 64 chars — use `openssl rand -hex 64` |
+| `JWT_REFRESH_SECRET` | Random string, min 64 chars |
+| `COOKIE_SECRET` | Random string, min 32 chars |
+| `REDIS_PASSWORD` | Redis password |
+| `SMTP_HOST / SMTP_USER / SMTP_PASS` | Real SMTP creds for OTP emails (leave blank for Ethereal dev mode) |
+
+> **Tip:** Generate secrets fast: `openssl rand -hex 64`
+
+### 3. Start the Platform
+
 ```bash
-docker-compose up --build -d
+docker compose up -d
 ```
-All images (PostgreSQL, Redis, Services, Gateway, Next.js) will build securely.
-- **Frontend Panel**: Available at `http://localhost/`
-- **Backend APIs:** Secured heavily under `http://localhost/api/*` via Nginx Gateway boundaries.
+
+All images (PostgreSQL, Redis, Auth, Project, Database, Analytics, Nginx, Next.js) will pull from Docker Hub automatically.
+
+| Service | URL |
+|---------|-----|
+| Frontend Dashboard | http://localhost/ |
+| Backend APIs (via Nginx) | http://localhost/api/* |
+| PostgREST Auto-API | http://localhost/api/rest/* |
+
+### 4. Rebuild After Code Changes (Local Dev Only)
+
+```bash
+# Rebuild specific service
+docker compose up -d --build auth-service
+
+# Rebuild everything
+docker compose up -d --build
+```
+
+---
+
+## CI/CD Pipeline — GitHub Actions
+
+The pipeline lives at [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and triggers on every push or PR to `main`.
+
+### Pipeline Stages
+
+```
+Push to main
+    │
+    ▼
+┌──────────────────────┐
+│  1. Filesystem Scan  │  ← Trivy scans source code for HIGH/CRITICAL CVEs
+└──────────┬───────────┘
+           │ (on pass)
+    ┌──────▼──────────────────────────┐
+    │  2. Build & Push (matrix x 6)   │  ← Parallel per service:
+    │                                 │    docker build → Trivy image scan → docker push
+    │  auth-service                   │
+    │  project-service                │
+    │  database-service               │
+    │  analytics-service              │
+    │  nginx-gateway                  │
+    │  frontend                       │
+    └──────┬──────────────────────────┘
+           │ (all pass)
+    ┌──────▼──────────────────┐
+    │  3. Success Notification │  ← Email sent via Gmail SMTP
+    └─────────────────────────┘
+```
+
+Each service is tagged with both a unique run ID (`<run_id>-<short_sha>`) and `:latest`. Failure at any stage sends an HTML alert email with the scan report attached.
+
+### Required GitHub Repository Secrets
+
+Go to **Settings → Secrets and variables → Actions → New repository secret** and add:
+
+| Secret Name | Description |
+|-------------|------------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub Access Token (not your password) — create at hub.docker.com → Security |
+| `MAIL_USERNAME` | Gmail address used to send CI alerts |
+| `MAIL_PASSWORD` | Gmail App Password (not your account password) — create at myaccount.google.com → Security → App passwords |
+| `ALERT_EMAIL_ADDRESS` | Recipient email for CI success/failure notifications |
+
+### Generating a Gmail App Password
+
+1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+2. Select **Mail** and **Other (Custom name)** → enter "RapidBase CI"
+3. Copy the 16-character password → use as `MAIL_PASSWORD`
+
+### Pulling the Latest Images on Your Server
+
+After CI has pushed new images, SSH into your EC2 instance and run:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+---
+
+## Infrastructure as Code — Terraform (AWS)
+
+All AWS infrastructure is defined in the [`terraform/`](./terraform/) directory. The setup provisions:
+- An EC2 instance (default: `m7i-flex.large`, 30 GB gp3 SSD)
+- A security group with ports 22 (SSH), 80 (HTTP), 5050 (pgAdmin), 8001 (Redis Commander)
+- An SSH key pair from your local public key
+- Docker auto-installed via the `scripts/install_docker.sh` user-data script
+
+### Prerequisites
+
+```bash
+# Install Terraform
+sudo apt-get install -y gnupg software-properties-common
+wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt-get install terraform
+
+# Configure AWS credentials
+aws configure
+# Enter: AWS Access Key ID, Secret Key, Region (e.g. ap-south-1), output format (json)
+```
+
+### Deploy Infrastructure
+
+```bash
+cd terraform/
+
+# 1. Initialize providers & modules
+terraform init
+
+# 2. Preview the changes
+terraform plan
+
+# 3. Apply — creates EC2 instance, security group, and key pair
+terraform apply
+```
+
+After `apply`, Terraform outputs:
+```
+public_ip  = "X.X.X.X"
+public_dns = "ec2-X-X-X-X.ap-south-1.compute.amazonaws.com"
+```
+
+### Connect & Deploy to EC2
+
+```bash
+# SSH into the instance (Docker is auto-installed via user-data)
+ssh -i ../rapidbase_ssh_key ubuntu@<public_ip>
+
+# On the EC2 instance — clone the repo and start services
+git clone https://github.com/ayushsoni1010/rapidbase.git
+cd rapidbase
+cp .env.example .env
+nano .env          # fill in your production secrets
+docker compose up -d
+```
+
+### Configurable Terraform Variables
+
+Defaults are in [`terraform/variable.tf`](./terraform/variable.tf). Override with `-var` or a `terraform.tfvars` file:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ami_id` | `ami-03446a3af42c5e74e` | Ubuntu 22.04 LTS AMI (ap-south-1) |
+| `instance_type` | `m7i-flex.large` | EC2 instance type |
+| `root_storage` | `30` | Root EBS volume size in GB |
+
+```bash
+# Example — override instance type
+terraform apply -var="instance_type=t3.medium"
+```
+
+### Tear Down Infrastructure
+
+```bash
+cd terraform/
+terraform destroy
+```
+
+> ⚠️ This will permanently delete your EC2 instance and all associated resources. Backup your data first.
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for full text.
+
+```
+MIT License
+
+Copyright (c) 2026 Ayush Soni
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
