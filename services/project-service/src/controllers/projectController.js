@@ -1,11 +1,37 @@
 const db = require('../config/db');
 const redis = require('../config/redis');
+const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const { generateSchemaName } = require('../utils/sanitize');
 const { logAction, ACTION_TYPES } = require('../utils/auditLogger');
 
-const API_KEY_CACHE_TTL = 300; // 5 minutes
-const PROJECT_LIST_CACHE_TTL = 600; // 10 minutes
+const API_KEY_CACHE_TTL = 300;
+const PROJECT_LIST_CACHE_TTL = 600;
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Localhost / development origins that are always allowed
+const DEV_ORIGIN_PATTERNS = [
+  /^https?:\/\/localhost(:\d+)?$/,
+  /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+  /^https?:\/\/\[::1\](:\d+)?$/,
+  /^https?:\/\/0\.0\.0\.0(:\d+)?$/,
+];
+
+const isDevOrigin = (origin) => {
+  if (!origin) return true; // no origin header (server-to-server, curl, etc.)
+  return DEV_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
+};
+
+// Map HTTP methods to required permissions
+const METHOD_PERMISSION_MAP = {
+  'GET': 'read',
+  'HEAD': 'read',
+  'OPTIONS': 'read',
+  'POST': 'insert',
+  'PUT': 'update',
+  'PATCH': 'update',
+  'DELETE': 'delete',
+};
 
 const getProjectWithRole = async (projectId, userId) => {
   const { rows } = await db.query(
@@ -39,16 +65,12 @@ const createProject = async (req, res, next) => {
       [project.project_id, ownerId]
     );
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}";`);
-    // BUG-8 FIX: Grant web_anon (PostgREST role) access to the new project schema
-    // so API key holders can query it via PostgREST. Also notify PostgREST to
-    // reload its schema cache so the new schema is immediately available.
     await client.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO web_anon;`);
     await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA "${schemaName}" GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO web_anon;`);
     await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA "${schemaName}" GRANT USAGE, SELECT ON SEQUENCES TO web_anon;`);
     await client.query(`NOTIFY pgrst, 'reload config';`);
     await client.query(`NOTIFY pgrst, 'reload schema';`);
     await client.query('COMMIT');
-    // Invalidate project list cache for this user
     await redis.del(`projects:user:${ownerId}`).catch(() => {});
     await logAction({ projectId: project.project_id, actorId: ownerId, actionType: ACTION_TYPES.PROJECT_CREATED, details: { project_name: name, schemaName }, ipAddress: req.ip });
     res.status(201).json({ status: 201, data: project, message: 'Project created successfully' });
@@ -112,7 +134,6 @@ const updateProject = async (req, res, next) => {
       `UPDATE projects SET ${fields.join(', ')}, updated_at = NOW() WHERE project_id = $${idx} RETURNING *`,
       values
     );
-    // Invalidate project list cache for this user
     await redis.del(`projects:user:${userId}`).catch(() => {});
     await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.PROJECT_UPDATED, details: { name, status, description }, ipAddress: req.ip });
     res.status(200).json({ status: 200, data: rows[0], message: 'Project updated' });
@@ -131,7 +152,6 @@ const deleteProject = async (req, res, next) => {
     await client.query(`DROP SCHEMA IF EXISTS "${project.schema_name}" CASCADE`);
     await client.query(`DELETE FROM projects WHERE project_id = $1`, [projectId]);
     await client.query('COMMIT');
-    // Invalidate project list cache and project schema cache
     await redis.del(`projects:user:${userId}`, `project_schema:${projectId}`).catch(() => {});
     await logAction({ projectId, actorId: userId, actionType: ACTION_TYPES.PROJECT_DELETED, details: { project_name: project.project_name }, ipAddress: req.ip });
     res.status(200).json({ status: 200, data: null, message: 'Project deleted' });
@@ -141,54 +161,132 @@ const deleteProject = async (req, res, next) => {
   } finally { client.release(); }
 };
 
+/**
+ * Validate a PostgREST API token (JWT or legacy raw key).
+ *
+ * Security layers:
+ *  1. Extract token from Authorization: Bearer or x-api-key header
+ *  2. Verify JWT signature (or fall back to DB lookup for legacy keys)
+ *  3. Check revocation via Redis → DB
+ *  4. Block public schema access unconditionally
+ *  5. Validate origin (localhost/dev always allowed, production must match)
+ *  6. Enforce per-method permissions (GET=read, POST=insert, PATCH=update, DELETE=delete)
+ */
 const validateApiKey = async (req, res) => {
-  const apiKey = req.headers['x-api-key'];
-  const origin = req.headers['x-origin'] || '';
-  
-  if (!apiKey) return res.status(401).json({ message: 'Missing API key' });
+  // 1. Extract token — support both Bearer and x-api-key
+  const authHeader = req.headers['authorization'] || req.headers['x-original-authorization'] || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const apiKeyHeader = req.headers['x-api-key'] || req.headers['x-original-api-key'] || '';
+  const token = bearerToken || apiKeyHeader;
+
+  if (!token) {
+    return res.status(401).json({ message: 'Missing API token. Provide Authorization: Bearer <token> or x-api-key header.' });
+  }
+
+  const origin = req.headers['x-original-origin'] || req.headers['origin'] || '';
+  const method = (req.headers['x-original-method'] || req.method || 'GET').toUpperCase();
 
   try {
-    // Check Redis cache first
-    const cacheKey = `apikey:${apiKey}`;
-    let keyData;
+    let schemaName, perms, allowedOrigin, keyId;
 
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      keyData = JSON.parse(cached);
-    } else {
-      // Cache miss → query DB
-      const { rows } = await db.query(
-        `SELECT a.origin_url, a.is_active, p.schema_name
-         FROM api_keys a
-         JOIN projects p ON a.project_id = p.project_id
-         WHERE a.api_key = $1`,
-        [apiKey]
-      );
+    // 2. Try JWT verification first
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      schemaName = decoded.schema;
+      perms = decoded.perms || ['read'];
+      allowedOrigin = decoded.origin || null;
+      keyId = decoded.kid;
+    } catch (jwtErr) {
+      // Not a valid JWT — fall back to legacy raw API key lookup
+      const cacheKey = `apikey:${token}`;
+      let keyData;
 
-      if (!rows.length || !rows[0].is_active) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        keyData = JSON.parse(cached);
+      } else {
+        const { rows } = await db.query(
+          `SELECT a.id, a.origin_url, a.is_active, a.permissions, p.schema_name
+           FROM api_keys a
+           JOIN projects p ON a.project_id = p.project_id
+           WHERE a.api_key = $1`,
+          [token]
+        );
+
+        if (!rows.length || !rows[0].is_active) {
+          return res.status(401).json({ message: 'Invalid or inactive API key' });
+        }
+
+        keyData = rows[0];
+        await redis.set(cacheKey, JSON.stringify(keyData), 'EX', API_KEY_CACHE_TTL);
+      }
+
+      if (!keyData.is_active) {
         return res.status(401).json({ message: 'Invalid or inactive API key' });
       }
 
-      keyData = rows[0];
-      // Cache the result
-      await redis.set(cacheKey, JSON.stringify(keyData), 'EX', API_KEY_CACHE_TTL);
+      schemaName = keyData.schema_name;
+      perms = Array.isArray(keyData.permissions) ? keyData.permissions : ['read'];
+      allowedOrigin = keyData.origin_url || null;
+      keyId = keyData.id;
     }
 
-    if (!keyData.is_active) {
-      return res.status(401).json({ message: 'Invalid or inactive API key' });
+    // 3. Check revocation (Redis fast path, then DB)
+    if (keyId) {
+      const revoked = await redis.get(`revoked_key:${keyId}`);
+      if (revoked) {
+        return res.status(401).json({ message: 'API key has been revoked' });
+      }
+
+      // DB fallback — check is_active
+      const { rows: activeCheck } = await db.query(
+        'SELECT is_active FROM api_keys WHERE id = $1',
+        [keyId]
+      );
+      if (activeCheck.length > 0 && !activeCheck[0].is_active) {
+        await redis.set(`revoked_key:${keyId}`, '1', 'EX', 86400).catch(() => {});
+        return res.status(401).json({ message: 'API key has been revoked' });
+      }
     }
 
-    if (keyData.origin_url && keyData.origin_url !== '*' && origin !== keyData.origin_url) {
-      return res.status(403).json({ message: 'Origin not allowed' });
+    // 4. Block public schema access — NEVER allow
+    if (!schemaName || schemaName === 'public' || !schemaName.startsWith('proj_')) {
+      return res.status(403).json({ message: 'Access denied. Invalid or restricted schema.' });
     }
 
-    // Fire-and-forget: update last_used_at (no need to await)
-    db.query(`UPDATE api_keys SET last_used_at = NOW() WHERE api_key = $1`, [apiKey]).catch(e => console.error(e));
+    // 5. Origin validation
+    if (allowedOrigin && allowedOrigin !== '*') {
+      // Origin is restricted — check if request origin is allowed
+      if (origin && !isDevOrigin(origin)) {
+        // Normalize both for comparison (strip trailing slashes)
+        const normalizedOrigin = origin.replace(/\/+$/, '').toLowerCase();
+        const normalizedAllowed = allowedOrigin.replace(/\/+$/, '').toLowerCase();
 
-    res.set('X-Schema-Name', keyData.schema_name);
+        if (normalizedOrigin !== normalizedAllowed) {
+          return res.status(403).json({ message: `Origin '${origin}' is not allowed. Expected: '${allowedOrigin}' or localhost.` });
+        }
+      }
+    }
+
+    // 6. Permission enforcement
+    const requiredPermission = METHOD_PERMISSION_MAP[method];
+    if (requiredPermission && !perms.includes(requiredPermission)) {
+      return res.status(403).json({
+        message: `Permission denied. This token lacks '${requiredPermission}' access. Token permissions: [${perms.join(', ')}]`
+      });
+    }
+
+    // Fire-and-forget: update last_used_at
+    if (keyId) {
+      db.query(`UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`, [keyId]).catch(e => console.error(e));
+    }
+
+    // Return schema + allowed origin to nginx for CORS and PostgREST profile headers
+    res.set('X-Schema-Name', schemaName);
+    res.set('X-Allowed-Origin', allowedOrigin || '*');
     return res.status(200).send('OK');
   } catch (err) {
-    console.error('API Key Validation Error:', err);
+    console.error('API Token Validation Error:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };

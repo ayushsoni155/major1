@@ -134,7 +134,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h3 className="text-base font-bold text-white">REST API Endpoint</h3>
-              <p className="text-xs text-zinc-500">Use this base URL with your API key to access your data via PostgREST</p>
+              <p className="text-xs text-zinc-500">Use this base URL with your Bearer token to access your data via PostgREST</p>
             </div>
           </div>
           <div className="flex items-center gap-3 p-4 rounded-xl bg-black/40 border border-white/10">

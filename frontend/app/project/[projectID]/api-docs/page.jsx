@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useProjects } from "@/providers/ProjectContext";
 import { useTables } from "@/providers/TableContext";
-import { BookOpen, Copy, Check, ChevronDown, Globe, Terminal, Code2, Braces, Filter, ArrowUpDown, Pencil, Trash2, Plus } from "lucide-react";
+import { BookOpen, Copy, Check, ChevronDown, Globe, Terminal, Code2, Braces, Filter, ArrowUpDown, Pencil, Trash2, Plus, Lock, Shield } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import useSWR from "swr";
 import api from "@/utils/axios";
@@ -110,8 +110,8 @@ export default function ApiDocsPage() {
 
   const apiEndpoint = `${baseUrl}/api/rest`;
   const firstTable = tables.length > 0 ? tables[0].table_name : "your_table";
-  const apiKeyPlaceholder = keys.length > 0 ? `${keys[0].key_prefix}••••••••` : "rb_your_api_key_here";
-  const apiKeyFull = keys.length > 0 ? `${keys[0].key_prefix}...` : "rb_your_api_key_here";
+  const apiKeyPlaceholder = keys.length > 0 ? `${keys[0].key_prefix}••••••••` : "rb_your_token_here";
+  const apiKeyFull = keys.length > 0 ? `${keys[0].key_prefix}...` : "YOUR_JWT_TOKEN";
 
   if (!selectedProject) {
     return (
@@ -157,12 +157,38 @@ export default function ApiDocsPage() {
       </motion.div>
 
       {/* Auth */}
-      <Section title="Authentication" icon={Terminal} color="bg-emerald-500/15 text-emerald-400" defaultOpen={true}>
+      <Section title="Authentication" icon={Shield} color="bg-emerald-500/15 text-emerald-400" defaultOpen={true}>
         <p className="text-sm text-zinc-400">
-          Every request must include your API key in the <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded text-xs">x-api-key</code> header.
+          Every request must include your JWT token in the <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded text-xs">Authorization</code> header as a Bearer token.
           You can generate API keys from the <strong className="text-white">API Keys</strong> page.
         </p>
-        <CodeBlock code={`# Include this header in every request\nx-api-key: ${apiKeyFull}`} />
+        <CodeBlock code={`# Include this header in every request\nAuthorization: Bearer ${apiKeyFull}`} />
+
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
+          <Lock className="w-4 h-4 text-amber-400 flex-shrink-0" />
+          <span className="text-xs text-amber-300">
+            Each token is scoped to your project schema with specific permissions (read, insert, update, delete). Public schema access is <strong>never</strong> allowed.
+          </span>
+        </div>
+
+        <div className="space-y-2 mt-2">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Security Features</h4>
+          <div className="grid gap-2 text-xs text-zinc-400">
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.02]">
+              <Shield className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <span><strong className="text-white">Schema Isolation</strong> — Each token is locked to its project schema. Cross-schema access is impossible.</span>
+            </div>
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.02]">
+              <Lock className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0 mt-0.5" />
+              <span><strong className="text-white">Permission Enforcement</strong> — GET requires read, POST requires insert, PATCH requires update, DELETE requires delete.</span>
+            </div>
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.02]">
+              <Globe className="w-3.5 h-3.5 text-violet-400 flex-shrink-0 mt-0.5" />
+              <span><strong className="text-white">Origin Control</strong> — Set an allowed origin to restrict production access. Localhost is always permitted for development.</span>
+            </div>
+          </div>
+        </div>
+
         {keys.length > 0 && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
             <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -179,21 +205,25 @@ export default function ApiDocsPage() {
           <MethodBadge method="GET" />
           <code className="text-xs text-zinc-400 font-mono">{apiEndpoint}/{firstTable}</code>
         </div>
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/15 mb-3">
+          <Shield className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+          <span className="text-[10px] text-emerald-300 uppercase font-semibold tracking-wider">Requires: read permission</span>
+        </div>
 
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-2">cURL</h4>
-        <CodeBlock code={`curl "${apiEndpoint}/${firstTable}" \\\n  -H "x-api-key: ${apiKeyFull}"`} />
+        <CodeBlock code={`curl "${apiEndpoint}/${firstTable}" \\\n  -H "Authorization: Bearer ${apiKeyFull}"`} />
 
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-2">JavaScript (Fetch)</h4>
         <CodeBlock code={`const response = await fetch("${apiEndpoint}/${firstTable}", {
   headers: {
-    "x-api-key": "${apiKeyFull}"
+    "Authorization": "Bearer ${apiKeyFull}"
   }
 });
 const data = await response.json();
 console.log(data);`} language="javascript" />
 
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-2">Select Specific Columns</h4>
-        <CodeBlock code={`curl "${apiEndpoint}/${firstTable}?select=id,email" \\\n  -H "x-api-key: ${apiKeyFull}"`} />
+        <CodeBlock code={`curl "${apiEndpoint}/${firstTable}?select=id,email" \\\n  -H "Authorization: Bearer ${apiKeyFull}"`} />
       </Section>
 
       {/* Filtering */}
@@ -233,16 +263,16 @@ console.log(data);`} language="javascript" />
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-2">Sorting</h4>
         <CodeBlock code={`# Sort ascending
 curl "${apiEndpoint}/${firstTable}?order=created_at.asc" \\
-  -H "x-api-key: ${apiKeyFull}"
+  -H "Authorization: Bearer ${apiKeyFull}"
 
 # Sort descending, nulls last
 curl "${apiEndpoint}/${firstTable}?order=price.desc.nullslast" \\
-  -H "x-api-key: ${apiKeyFull}"`} />
+  -H "Authorization: Bearer ${apiKeyFull}"`} />
 
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-2">Pagination</h4>
         <CodeBlock code={`# Limit to 10 results, skip first 20 (page 3)
 curl "${apiEndpoint}/${firstTable}?limit=10&offset=20" \\
-  -H "x-api-key: ${apiKeyFull}"`} />
+  -H "Authorization: Bearer ${apiKeyFull}"`} />
       </Section>
 
       {/* POST — Insert */}
@@ -251,17 +281,21 @@ curl "${apiEndpoint}/${firstTable}?limit=10&offset=20" \\
           <MethodBadge method="POST" />
           <code className="text-xs text-zinc-400 font-mono">{apiEndpoint}/{firstTable}</code>
         </div>
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-500/5 border border-blue-500/15 mb-3">
+          <Shield className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+          <span className="text-[10px] text-blue-300 uppercase font-semibold tracking-wider">Requires: insert permission</span>
+        </div>
 
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-2">Insert Single Row</h4>
         <CodeBlock code={`curl -X POST "${apiEndpoint}/${firstTable}" \\
-  -H "x-api-key: ${apiKeyFull}" \\
+  -H "Authorization: Bearer ${apiKeyFull}" \\
   -H "Content-Type: application/json" \\
   -H "Prefer: return=representation" \\
   -d '{"full_name": "John Doe", "email": "john@example.com"}'`} />
 
         <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mt-4 mb-2">Insert Multiple Rows</h4>
         <CodeBlock code={`curl -X POST "${apiEndpoint}/${firstTable}" \\
-  -H "x-api-key: ${apiKeyFull}" \\
+  -H "Authorization: Bearer ${apiKeyFull}" \\
   -H "Content-Type: application/json" \\
   -H "Prefer: return=representation" \\
   -d '[
@@ -283,9 +317,13 @@ curl "${apiEndpoint}/${firstTable}?limit=10&offset=20" \\
           <MethodBadge method="PATCH" />
           <code className="text-xs text-zinc-400 font-mono">{apiEndpoint}/{firstTable}?id=eq.1</code>
         </div>
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/5 border border-amber-500/15 mb-3">
+          <Shield className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+          <span className="text-[10px] text-amber-300 uppercase font-semibold tracking-wider">Requires: update permission</span>
+        </div>
 
         <CodeBlock code={`curl -X PATCH "${apiEndpoint}/${firstTable}?id=eq.1" \\
-  -H "x-api-key: ${apiKeyFull}" \\
+  -H "Authorization: Bearer ${apiKeyFull}" \\
   -H "Content-Type: application/json" \\
   -H "Prefer: return=representation" \\
   -d '{"full_name": "Jane Updated"}'`} />
@@ -304,9 +342,13 @@ curl "${apiEndpoint}/${firstTable}?limit=10&offset=20" \\
           <MethodBadge method="DELETE" />
           <code className="text-xs text-zinc-400 font-mono">{apiEndpoint}/{firstTable}?id=eq.1</code>
         </div>
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/5 border border-red-500/15 mb-3">
+          <Shield className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+          <span className="text-[10px] text-red-300 uppercase font-semibold tracking-wider">Requires: delete permission</span>
+        </div>
 
         <CodeBlock code={`curl -X DELETE "${apiEndpoint}/${firstTable}?id=eq.1" \\
-  -H "x-api-key: ${apiKeyFull}"`} />
+  -H "Authorization: Bearer ${apiKeyFull}"`} />
 
         <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/15">
           <Trash2 className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -320,35 +362,35 @@ curl "${apiEndpoint}/${firstTable}?limit=10&offset=20" \\
       <Section title="JavaScript Example" icon={Code2} color="bg-indigo-500/15 text-indigo-400">
         <p className="text-sm text-zinc-400 mb-3">Full CRUD example using <code className="text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded text-xs">fetch</code>:</p>
         <CodeBlock code={`const API_URL = "${apiEndpoint}";
-const API_KEY = "${apiKeyFull}";
+const TOKEN = "${apiKeyFull}";
 
 const headers = {
-  "x-api-key": API_KEY,
+  "Authorization": \`Bearer \${TOKEN}\`,
   "Content-Type": "application/json",
   "Prefer": "return=representation",
 };
 
-// GET — Read all
+// GET — Read all (requires: read)
 const users = await fetch(\`\${API_URL}/${firstTable}\`, { headers }).then(r => r.json());
 
-// GET — With filter
+// GET — With filter (requires: read)
 const adults = await fetch(\`\${API_URL}/${firstTable}?age=gte.18&order=name.asc\`, { headers }).then(r => r.json());
 
-// POST — Insert
+// POST — Insert (requires: insert)
 const newUser = await fetch(\`\${API_URL}/${firstTable}\`, {
   method: "POST",
   headers,
   body: JSON.stringify({ full_name: "New User", email: "new@example.com" }),
 }).then(r => r.json());
 
-// PATCH — Update
+// PATCH — Update (requires: update)
 await fetch(\`\${API_URL}/${firstTable}?id=eq.\${newUser[0].id}\`, {
   method: "PATCH",
   headers,
   body: JSON.stringify({ full_name: "Updated Name" }),
 });
 
-// DELETE — Remove
+// DELETE — Remove (requires: delete)
 await fetch(\`\${API_URL}/${firstTable}?id=eq.\${newUser[0].id}\`, {
   method: "DELETE",
   headers,

@@ -183,8 +183,6 @@ END
 $$;
 
 GRANT web_anon TO authenticator;
-GRANT USAGE ON SCHEMA public TO web_anon;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO web_anon;
 
 -- ============================================
 -- PostgREST Dynamic Schema Configuration
@@ -200,15 +198,16 @@ RETURNS void AS $$
 DECLARE
     schemas text;
 BEGIN
-    -- Build comma-separated list: "public,proj_abc123,proj_def456,..."
+    -- Build comma-separated list of project schemas ONLY (public is excluded)
     SELECT string_agg(schema_name, ',')
     INTO schemas
     FROM projects;
 
     IF schemas IS NOT NULL AND schemas != '' THEN
-        PERFORM set_config('pgrst.db_schemas', 'public,' || schemas, true);
+        PERFORM set_config('pgrst.db_schemas', schemas, true);
     ELSE
-        PERFORM set_config('pgrst.db_schemas', 'public', true);
+        -- No projects yet — set a dummy value so PostgREST doesn't fall back to public
+        PERFORM set_config('pgrst.db_schemas', 'pg_catalog', true);
     END IF;
 END;
 $$ LANGUAGE plpgsql;
