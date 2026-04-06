@@ -1,30 +1,438 @@
-# RapidBase - The Open-Source Backend for Rapid Development
+<![CDATA[<div align="center">
 
-> **Developed by Ayush Soni**
+# ⚡ RapidBase
 
-## Objective & Vision
-RapidBase is a highly scalable, self-hosted, multi-tenant Backend-as-a-Service (BaaS) designed to be the ultimate open-source alternative to platforms like Firebase and Supabase. The core problem it solves is the complexity of configuring and managing multi-tenant architectures from scratch. RapidBase provides developers with a streamlined dashboard for project management, authentication, database auto-generation (via PostgREST), direct SQL execution, and comprehensive analytics—all isolated perfectly per tenant. The overall goal is to empower developers to launch production-ready applications with robust backend infrastructure and an intuitive management UI in minutes.
+**The Open-Source Backend-as-a-Service for Rapid Development**
 
-## Core Features
-1. **Multi-Tenant Postgres Databases**: Instant schema isolation per project.
-2. **Auto-Generated REST APIs**: Powered by PostgREST based on your schema.
-3. **Advanced Authentication**: JWT, Refresh Tokens, and OTP-based Email authentication.
-4. **SQL Editor**: Direct database execution with audit logging and history.
-5. **Role-Based Access Control (RBAC)**: Admin, Editor, and Viewer roles for project members.
-6. **Analytics & Dashboards**: Fully customizable grid layouts, real-time query metrics, and reporting.
-7. **Developer API Keys**: Manage secure programmatic access to projects.
-8. **Real-time Notifications**: Invitation systems and system alerts.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](./docker-compose.yml)
+[![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](./.github/workflows/ci.yml)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![PostgREST](https://img.shields.io/badge/PostgREST-v12.2-5B4F9B)](https://postgrest.org/)
 
-## Tech Stack & Module Deep-Dive
-- **Next.js (App Router)**: The frontend framework showcasing a highly responsive, animated dashboard UI (TailwindCSS v4, React Flow, Mermaid).
-- **Node.js & Express**: Microservices architecture for modular performance handling Auth, Projects, Database querying, and Analytics.
-- **PostgreSQL**: The primary relational database ensuring strict schema-level multi-tenancy.
-- **Redis**: Caching session states, user rate-limiting, and managing rapid OTP requests to prevent API abuse.
-- **PostgREST**: Instantly turns the PostgreSQL database into a RESTful API, eliminating endless CRUD boilerplate.
-- **Nginx**: Serving as an API Gateway, Reverse Proxy, and Load Balancer to securely route incoming traffic dynamically.
-- **Docker & Docker Compose**: Containerizing the entire platform, making local development, testing, and production deployment reproducible.
+> **Developed by [Ayush Soni](https://github.com/ayushsoni1010)**
 
-## Architectural Diagrams
+[Features](#-features) · [Quick Start](#-quick-start) · [API Docs](#-api-documentation) · [PostgREST API](#-postgrest-auto-generated-rest-api) · [Architecture](#-architecture)
+
+</div>
+
+---
+
+## 🎯 What is RapidBase?
+
+RapidBase is a **self-hosted, multi-tenant Backend-as-a-Service** — an open-source alternative to Firebase and Supabase. It gives you:
+
+- **Instant PostgreSQL database** with schema-level isolation per project
+- **Auto-generated REST API** via PostgREST — no backend code needed
+- **Built-in authentication** with JWT, OTP email verification, and refresh tokens
+- **Dashboard UI** for managing tables, running SQL, viewing analytics, and team collaboration
+
+Deploy the entire platform with a single `docker compose up -d` command.
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 🗄️ **Multi-Tenant Databases** | Every project gets a dedicated PostgreSQL schema (e.g., `proj_ki1jw9xf`). Complete data isolation. |
+| 🔌 **Auto-Generated REST API** | PostgREST turns your tables into REST endpoints at `/api/rest/`. Insert, filter, paginate — zero config. |
+| 🔐 **JWT Authentication** | Register, login, OTP verify, password reset, refresh tokens — all built-in with rate limiting. |
+| 🔑 **JWT API Keys** | Generate scoped API keys with granular permissions (`read`, `insert`, `update`, `delete`) and origin whitelisting. |
+| ✏️ **SQL Editor** | Execute raw SQL with syntax highlighting, query history, execution time tracking, and audit logging. |
+| 👥 **Team Collaboration** | Invite members as Admin, Editor, or Viewer. Email invitations with accept/decline workflow. |
+| 📊 **Analytics Dashboard** | Build custom charts and widgets. Drag-and-drop dashboard layouts saved per project. |
+| 🔔 **Real-time Notifications** | Server-Sent Events via Redis Pub/Sub for instant alerts on invitations and project updates. |
+| 🗺️ **Schema Visualization** | Interactive ER diagrams with React Flow showing tables, columns, and relationships. |
+| 📋 **Audit Logging** | Every action tracked — table changes, member updates, SQL queries — with IP and timestamps. |
+| 🚀 **CI/CD Pipeline** | GitHub Actions with Trivy vulnerability scanning, Docker builds, and auto-push to Docker Hub. |
+| ⚡ **Redis Caching** | OTP codes, API key validation, project lists, and rate limiting all cached in Redis. |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Docker | 24+ | Container runtime |
+| Docker Compose | v2+ | Multi-container orchestration |
+| Git | 2+ | Source control |
+
+### 1. Clone & Configure
+
+```bash
+git clone https://github.com/ayushsoni1010/rapidbase.git
+cd rapidbase
+cp .env.example .env
+```
+
+Edit `.env` — fill in secrets (use `openssl rand -hex 64` to generate):
+
+| Variable | Description |
+|----------|-------------|
+| `POSTGRES_PASSWORD` | PostgreSQL password (min 32 chars) |
+| `JWT_SECRET` | JWT signing secret (min 64 chars) |
+| `JWT_REFRESH_SECRET` | Refresh token secret (min 64 chars) |
+| `COOKIE_SECRET` | Cookie session secret (min 32 chars) |
+| `REDIS_PASSWORD` | Redis password |
+| `SMTP_*` | SMTP credentials for OTP emails (leave blank for Ethereal dev mode) |
+
+### 2. Start Everything
+
+```bash
+docker compose up -d
+```
+
+### 3. Access
+
+| Service | URL |
+|---------|-----|
+| 🌐 Dashboard | http://localhost/ |
+| 🔌 REST API (via Nginx) | http://localhost/api/* |
+| 📡 PostgREST API | http://localhost/api/rest/* |
+| 🗄️ pgAdmin | http://localhost:5050/ |
+| 📊 Redis Insight | http://localhost:8001/ |
+
+### 4. Your First Project (5 minutes)
+
+1. **Sign up** at http://localhost/signup — verify email with OTP
+2. **Create a project** — click "New Project" on the dashboard
+3. **Create a table** — use the visual table builder or SQL Editor
+4. **Generate an API key** — go to API Keys → Generate New Key → choose permissions
+5. **Query your data** — use the JWT token to call `/api/rest/your_table`
+
+```bash
+# Example: Read all rows from your "users" table
+curl "http://localhost/api/rest/users" \
+  -H "Authorization: Bearer <your_jwt_token>"
+```
+
+---
+
+## 🛡️ Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Frontend** | Next.js (App Router), TailwindCSS v4 | Dashboard UI with animations (Framer Motion) |
+| **Gateway** | Nginx | Reverse proxy, API routing, JWT validation via auth_request |
+| **Auth** | Node.js + Express | JWT, refresh tokens, OTP, password reset, rate limiting |
+| **Projects** | Node.js + Express | CRUD, members, invitations, notifications (SSE), API keys |
+| **Database** | Node.js + Express | SQL execution, query history, audit logging |
+| **Analytics** | Node.js + Express | Chart builder, table stats, dashboard CRUD |
+| **REST API** | PostgREST v12.2 | Auto-generated CRUD from PostgreSQL schemas |
+| **Database** | PostgreSQL 16 | Primary data store with schema-per-project isolation |
+| **Cache** | Redis 7 | OTP, sessions, rate-limits, API key cache, Pub/Sub |
+| **CI/CD** | GitHub Actions | Trivy scans, Docker builds, Docker Hub push |
+| **IaC** | Terraform | AWS EC2 provisioning |
+
+---
+
+## 📖 API Documentation
+
+All requests go through the Nginx API Gateway at port 80. Authentication uses `Authorization: Bearer <token>` or HTTP-only cookies set during login.
+
+### Authentication Service — `/api/auth/*`
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|:----:|-------------|
+| `POST` | `/api/auth/register` | ❌ | Register (sends OTP to email) |
+| `POST` | `/api/auth/verify-otp` | ❌ | Verify OTP → receive JWT + refresh token |
+| `POST` | `/api/auth/resend-otp` | ❌ | Resend OTP (10/hr limit) |
+| `POST` | `/api/auth/login` | ❌ | Login with email + password |
+| `POST` | `/api/auth/refresh` | ❌ | Refresh JWT tokens |
+| `POST` | `/api/auth/logout` | ❌ | Logout & invalidate refresh token |
+| `POST` | `/api/auth/forgot-password` | ❌ | Send password reset link via email |
+| `POST` | `/api/auth/reset-password` | ❌ | Reset password with reset token |
+| `GET` | `/api/auth/me` | ✅ | Get current user profile |
+| `PATCH` | `/api/auth/profile` | ✅ | Update name, avatar |
+| `POST` | `/api/auth/change-password` | ✅ | Change password |
+| `DELETE` | `/api/auth/account` | ✅ | Permanently delete account |
+
+### Project Service — `/api/projects/*`
+
+#### Projects
+
+| Method | Endpoint | Role | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/api/projects/` | any | List my projects (cached in Redis) |
+| `POST` | `/api/projects/` | any | Create project + auto-provision schema |
+| `GET` | `/api/projects/:id` | any | Get project details |
+| `PATCH` | `/api/projects/:id` | admin | Update project name/description |
+| `DELETE` | `/api/projects/:id` | owner | Delete project + drop schema |
+
+#### Tables & Schema
+
+| Method | Endpoint | Role | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/api/schema/:projectId` | any | Full schema structure |
+| `GET` | `/api/projects/:id/tables` | any | List tables |
+| `POST` | `/api/projects/:id/tables` | admin/editor | Create table |
+| `GET` | `/api/projects/:id/tables/:name` | any | Get table columns |
+| `PATCH` | `/api/projects/:id/tables/:name` | admin/editor | Alter table (add/drop/rename columns) |
+| `DELETE` | `/api/projects/:id/tables/:name` | admin | Drop table |
+
+#### Table Data (UI CRUD)
+
+| Method | Endpoint | Role | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/api/projects/:id/tables/:name/data` | any | Paginated row read |
+| `POST` | `/api/projects/:id/tables/:name/data` | admin/editor | Insert row |
+| `PATCH` | `/api/projects/:id/tables/:name/rows` | admin/editor | Update row |
+| `DELETE` | `/api/projects/:id/tables/:name/rows` | admin/editor | Delete row |
+
+#### Members & Invitations
+
+| Method | Endpoint | Role | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/api/projects/:id/members` | any | List project members |
+| `POST` | `/api/projects/:id/members` | admin | Invite member (sends email) |
+| `PATCH` | `/api/projects/:id/members/:mid` | admin | Update member role |
+| `DELETE` | `/api/projects/:id/members/:mid` | admin | Remove member |
+| `GET` | `/api/projects/invitations/mine` | any | My pending invitations |
+| `POST` | `/api/projects/invitations/accept/:token` | any | Accept invitation |
+| `POST` | `/api/projects/invitations/decline/:token` | any | Decline invitation |
+
+#### Notifications
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/projects/notifications` | List all notifications |
+| `GET` | `/api/projects/notifications/unread-count` | Unread count |
+| `GET` | `/api/projects/notifications/stream` | **SSE stream** (real-time via Redis Pub/Sub) |
+| `PATCH` | `/api/projects/notifications/mark-all-read` | Mark all read |
+| `PATCH` | `/api/projects/notifications/:id/read` | Mark single read |
+
+#### API Keys
+
+| Method | Endpoint | Role | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/api/projects/:id/keys` | any | List API keys (prefix only) |
+| `POST` | `/api/projects/:id/keys` | admin | Generate new JWT API key |
+| `DELETE` | `/api/projects/:id/keys/:keyId` | admin | Revoke API key |
+
+### Database Service — `/api/query/*`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/query/execute` | Execute raw SQL against project schema |
+| `GET` | `/api/query/history?projectId=uuid` | Query history for a project |
+| `GET` | `/api/auditlog?projectId=uuid` | Project audit log |
+
+### Analytics Service — `/api/analytics/*`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/analytics/tables?projectId=uuid` | List tables for analytics |
+| `GET` | `/api/analytics/tables/:name/columns?projectId=uuid` | List columns |
+| `GET` | `/api/analytics/chart?projectId&tableName&xAxis&yAxis&aggregation` | Chart data |
+| `GET` | `/api/analytics/stats?projectId&tableName` | Table stats |
+| `GET` | `/api/analytics/dashboard?projectId=uuid` | Get dashboard config |
+| `POST` | `/api/analytics/dashboard` | Save dashboard config |
+
+---
+
+## 📡 PostgREST Auto-Generated REST API
+
+PostgREST provides **instant, high-performance REST access** to all your project tables. Every request is authenticated via a **JWT API key** generated from the dashboard.
+
+### How It Works
+
+1. You **create a table** in your project (via UI or SQL Editor)
+2. PostgREST **instantly exposes** it at `/api/rest/{table_name}`
+3. You **generate a JWT API key** with specific permissions from the API Keys page
+4. Your key is validated by nginx → project-service, then the request is routed to PostgREST with the correct schema
+
+### Authentication
+
+Every request requires a JWT token in the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" http://YOUR_DOMAIN/api/rest/your_table
+```
+
+**JWT Token Structure:**
+```json
+{
+  "kid": "api-key-id",
+  "pid": "project-id",
+  "schema": "proj_ki1jw9xf",
+  "perms": ["read"],
+  "origin": null
+}
+```
+
+**Permission Enforcement:**
+| HTTP Method | Required Permission | Example |
+|-------------|-------------------|---------|
+| `GET` / `HEAD` | `read` | Read rows from a table |
+| `POST` | `insert` | Insert new rows |
+| `PATCH` / `PUT` | `update` | Update existing rows |
+| `DELETE` | `delete` | Delete rows |
+
+A key with only `["read"]` permission **cannot** insert data (returns 403). A key with only `["insert"]` permission **cannot** read data (returns 403).
+
+### Read Records
+
+```bash
+# Get all rows
+curl "http://YOUR_DOMAIN/api/rest/users" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Select specific columns
+curl "http://YOUR_DOMAIN/api/rest/users?select=id,email" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter: exact match
+curl "http://YOUR_DOMAIN/api/rest/users?id=eq.5" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter: greater than
+curl "http://YOUR_DOMAIN/api/rest/users?age=gt.18" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter: pattern match (case-insensitive)
+curl "http://YOUR_DOMAIN/api/rest/users?name=ilike.*john*" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Sort + Pagination
+curl "http://YOUR_DOMAIN/api/rest/users?order=created_at.desc&limit=10&offset=0" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Insert Records
+
+```bash
+# Single row
+curl -X POST "http://YOUR_DOMAIN/api/rest/users" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Prefer: return=representation" \
+  -d '{"username": "johndoe", "email": "john@example.com", "password_hash": "hashed_pw"}'
+
+# Multiple rows
+curl -X POST "http://YOUR_DOMAIN/api/rest/users" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '[{"username": "alice"}, {"username": "bob"}]'
+```
+
+### Update Records
+
+```bash
+curl -X PATCH "http://YOUR_DOMAIN/api/rest/users?id=eq.1" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "updated_name"}'
+```
+
+> ⚠️ Always include a filter (`?id=eq.X`), otherwise **ALL rows** will be updated.
+
+### Delete Records
+
+```bash
+curl -X DELETE "http://YOUR_DOMAIN/api/rest/users?id=eq.1" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+> ⚠️ Always include a filter, otherwise **ALL rows** will be deleted.
+
+### JavaScript Example
+
+```javascript
+const API_URL = "http://YOUR_DOMAIN/api/rest";
+const TOKEN = "YOUR_JWT_TOKEN";
+
+const headers = {
+  "Authorization": `Bearer ${TOKEN}`,
+  "Content-Type": "application/json",
+  "Prefer": "return=representation",
+};
+
+// Read all users (requires: read permission)
+const users = await fetch(`${API_URL}/users`, { headers }).then(r => r.json());
+
+// Read with filter (requires: read permission)
+const active = await fetch(`${API_URL}/users?status=eq.active&order=name.asc`, { headers })
+  .then(r => r.json());
+
+// Insert (requires: insert permission)
+const newUser = await fetch(`${API_URL}/users`, {
+  method: "POST", headers,
+  body: JSON.stringify({ username: "newuser", email: "new@test.com", password_hash: "hashed" }),
+}).then(r => r.json());
+
+// Update (requires: update permission)
+await fetch(`${API_URL}/users?id=eq.${newUser[0].id}`, {
+  method: "PATCH", headers,
+  body: JSON.stringify({ username: "updated" }),
+});
+
+// Delete (requires: delete permission)
+await fetch(`${API_URL}/users?id=eq.${newUser[0].id}`, {
+  method: "DELETE", headers,
+});
+```
+
+### Python Example
+
+```python
+import requests
+
+API = "http://YOUR_DOMAIN/api/rest"
+HEADERS = {"Authorization": "Bearer YOUR_JWT_TOKEN"}
+
+# Read
+users = requests.get(f"{API}/users", headers=HEADERS).json()
+
+# Read with filter
+active = requests.get(f"{API}/users?status=eq.active", headers=HEADERS).json()
+
+# Insert
+requests.post(f"{API}/users",
+    headers={**HEADERS, "Content-Type": "application/json"},
+    json={"username": "bob", "email": "bob@example.com", "password_hash": "hashed"}
+)
+
+# Update
+requests.patch(f"{API}/users?id=eq.1",
+    headers={**HEADERS, "Content-Type": "application/json"},
+    json={"username": "bob_updated"}
+)
+
+# Delete
+requests.delete(f"{API}/users?id=eq.1", headers=HEADERS)
+```
+
+### Filter Operators Reference
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `eq` | Equals | `?id=eq.5` |
+| `neq` | Not equal | `?status=neq.deleted` |
+| `gt` / `lt` | Greater / Less than | `?age=gt.18` |
+| `gte` / `lte` | Greater/Less or equal | `?price=lte.100` |
+| `like` | Pattern match (case-sensitive) | `?name=like.*john*` |
+| `ilike` | Pattern match (case-insensitive) | `?name=ilike.*john*` |
+| `in` | In list | `?status=in.(active,pending)` |
+| `is` | IS (null/true/false) | `?deleted_at=is.null` |
+
+### Response Codes
+
+| Code | Meaning |
+|------|---------|
+| `200` | Success (GET, PATCH) |
+| `201` | Created (POST with `Prefer: return=representation`) |
+| `204` | Success, no content returned |
+| `401` | Invalid or missing API key |
+| `403` | Permission denied or wrong origin |
+| `404` | Table not found |
+| `409` | Unique constraint violation |
+
+---
+
+## 🏗️ Architecture
 
 ### System Flow Diagram
 ```mermaid
@@ -34,7 +442,7 @@ flowchart TD
     subgraph Gateway ["Nginx API Gateway — Port 80"]
         direction TB
         NginxRoute["Route & Reverse Proxy"]
-        AuthRequest["auth_request — API Key Validation"]
+        AuthRequest["auth_request — JWT Validation"]
     end
 
     subgraph Services ["Microservices Layer"]
@@ -55,13 +463,13 @@ flowchart TD
 
     Browser -->|"HTTP/80"| NginxRoute
     NginxRoute --> Frontend
-    NginxRoute -->|"POST /api/auth/*"| Auth
-    NginxRoute -->|"GET/POST /api/projects/*"| Project
-    NginxRoute -->|"POST /api/query/*"| DB
-    NginxRoute -->|"GET /api/analytics/*"| Analytics
-    NginxRoute -->|"x-api-key header"| AuthRequest
-    AuthRequest -->|"validate"| Project
-    AuthRequest -->|"proxy"| PostgREST
+    NginxRoute -->|"/api/auth/*"| Auth
+    NginxRoute -->|"/api/projects/*"| Project
+    NginxRoute -->|"/api/query/*"| DB
+    NginxRoute -->|"/api/analytics/*"| Analytics
+    NginxRoute -->|"/api/rest/* + Bearer token"| AuthRequest
+    AuthRequest -->|"validate JWT"| Project
+    AuthRequest -->|"proxy with schema headers"| PostgREST
 
     Auth -->|"users, sessions"| Postgres
     Auth -->|"OTP, rate-limit, refresh tokens"| Redis
@@ -72,67 +480,44 @@ flowchart TD
     PostgREST -->|"project schemas (REST)"| Postgres
 ```
 
-### Use Case Diagram
-```mermaid
-flowchart LR
-    U(["👤 Authenticated User"])
-    A(["🔑 API Key Client"])
-    AD(["🛡️ Admin / Owner"])
+### PostgREST Request Flow
 
-    subgraph Auth ["Authentication"]
-        UC1["Register & OTP Verify"]
-        UC2["Login / Logout"]
-        UC3["Forgot / Reset Password"]
-        UC4["Refresh JWT Token"]
-        UC5["Update Profile"]
-        UC6["Change Password"]
-        UC7["Delete Account"]
-    end
-
-    subgraph Projects ["Project Management"]
-        UC8["Create / List Projects"]
-        UC9["View / Update / Delete Project"]
-        UC10["Invite Members"]
-        UC11["Accept / Decline Invitation"]
-        UC12["Manage Member Roles"]
-        UC13["View Notifications (SSE)"]
-    end
-
-    subgraph Database ["Database Operations"]
-        UC14["Create / Alter / Drop Tables"]
-        UC15["Insert / Update / Delete / Read Rows"]
-        UC16["Execute Raw SQL"]
-        UC17["View Query History"]
-        UC18["View Audit Logs"]
-        UC19["Browse Schema Structure"]
-    end
-
-    subgraph Keys ["API Key Management"]
-        UC20["Generate API Key"]
-        UC21["List / Revoke API Keys"]
-    end
-
-    subgraph REST ["PostgREST Auto API"]
-        UC22["CRUD via REST (x-api-key)"]
-        UC23["Filter / Sort / Paginate"]
-    end
-
-    subgraph Analytics ["Analytics"]
-        UC24["View Table Stats"]
-        UC25["Build Charts"]
-        UC26["Save / Load Dashboard"]
-    end
-
-    U --> Auth
-    U --> Projects
-    U --> Database
-    U --> Keys
-    U --> Analytics
-    AD --> UC10
-    AD --> UC12
-    AD --> UC20
-    AD --> UC21
-    A --> REST
+```
+Client Request
+    │  GET /api/rest/users
+    │  Header: Authorization: Bearer <jwt_token>
+    ▼
+┌─────────────────────────────────┐
+│  Nginx Gateway (Port 80)       │
+│  1. Match /api/rest/* location  │
+│  2. auth_request → /_validate  │
+└──────────┬──────────────────────┘
+           ▼
+┌─────────────────────────────────┐
+│  Project Service (Port 4002)   │
+│  1. Verify JWT signature       │
+│  2. Extract schema + perms     │
+│  3. Check key not revoked      │
+│  4. Block public schema        │
+│  5. Validate origin            │
+│  6. Check method permission    │
+│  7. Return X-Schema-Name header│
+└──────────┬──────────────────────┘
+           ▼
+┌─────────────────────────────────┐
+│  Nginx (continued)             │
+│  1. Strip auth headers         │
+│  2. Set Accept-Profile header  │
+│  3. Set Content-Profile header │
+│  4. Proxy to PostgREST:3001    │
+└──────────┬──────────────────────┘
+           ▼
+┌─────────────────────────────────┐
+│  PostgREST (Port 3001)         │
+│  1. Read Accept-Profile schema │
+│  2. Execute query in schema    │
+│  3. Return JSON response       │
+└─────────────────────────────────┘
 ```
 
 ### ER Diagram (Core Entities)
@@ -144,8 +529,7 @@ erDiagram
     users ||--o{ query_history : "executes"
     users ||--o{ audit_log : "performs"
     users ||--o{ notifications : "receives"
-    users ||--o{ project_invitations : "invites as inviter"
-    users ||--o{ project_invitations : "receives as invitee"
+    users ||--o{ project_invitations : "invites/receives"
 
     projects ||--o{ project_members : "has members"
     projects ||--o{ api_keys : "has keys"
@@ -159,24 +543,17 @@ erDiagram
         varchar email "UNIQUE NOT NULL"
         varchar password_hash "NOT NULL"
         varchar name
-        text avatar_url
-        varchar role "DEFAULT user"
         boolean is_verified "DEFAULT false"
-        boolean is_active "DEFAULT true"
-        timestamptz last_login
         timestamptz created_at
-        timestamptz updated_at
     }
 
     projects {
         uuid project_id PK
         uuid owner_id FK
         varchar project_name "NOT NULL"
-        text project_description
         varchar schema_name "UNIQUE NOT NULL"
         varchar project_status "DEFAULT active"
         timestamptz created_at
-        timestamptz updated_at
     }
 
     project_members {
@@ -184,7 +561,6 @@ erDiagram
         uuid project_id FK
         uuid user_id FK
         varchar role "admin|editor|viewer"
-        timestamptz invited_at
     }
 
     api_keys {
@@ -193,13 +569,10 @@ erDiagram
         uuid created_by FK
         varchar key_name "NOT NULL"
         varchar api_key "UNIQUE NOT NULL"
-        varchar key_prefix "NOT NULL"
-        text origin_url
         jsonb permissions "DEFAULT read"
+        text origin_url
         boolean is_active "DEFAULT true"
         timestamptz last_used_at
-        timestamptz created_at
-        timestamptz expires_at
     }
 
     query_history {
@@ -209,9 +582,6 @@ erDiagram
         text query_text "NOT NULL"
         varchar query_status "success|failed"
         integer execution_time_ms
-        integer rows_affected "DEFAULT 0"
-        text error_message
-        timestamptz created_at
     }
 
     audit_log {
@@ -219,9 +589,8 @@ erDiagram
         uuid project_id FK
         uuid actor_id FK
         varchar action_type "NOT NULL"
-        jsonb details "DEFAULT {}"
+        jsonb details
         varchar ip_address
-        timestamptz created_at
     }
 
     notifications {
@@ -229,501 +598,112 @@ erDiagram
         uuid user_id FK
         varchar type "NOT NULL"
         varchar title "NOT NULL"
-        text message
-        jsonb data "DEFAULT {}"
         boolean is_read "DEFAULT false"
-        timestamptz created_at
-    }
-
-    project_invitations {
-        uuid id PK
-        uuid project_id FK
-        uuid inviter_id FK
-        uuid invitee_id FK
-        varchar invitee_email "NOT NULL"
-        varchar role "DEFAULT viewer"
-        varchar token "UNIQUE NOT NULL"
-        varchar status "pending|accepted|declined"
-        timestamptz created_at
-        timestamptz expires_at "DEFAULT +7 days"
     }
 
     analytics_dashboards {
         uuid id PK
         uuid project_id FK "UNIQUE"
-        jsonb layout "DEFAULT []"
-        jsonb widgets "DEFAULT []"
-        timestamptz updated_at
+        jsonb layout
+        jsonb widgets
     }
 ```
 
-> **Note:** OTP codes and refresh tokens are stored in **Redis** (not in PostgreSQL) for fast access and automatic TTL expiry — there are no `otp_code` / `otp_attempts` columns on the `users` table.
-
-## Comprehensive API Documentation
-
-All requests interact with the platform through the unified Nginx API Gateway. Authentication is strictly handled via `Authorization: Bearer <token>` or HTTP-only cookies assigned during Login. All successful responses generally follow a `{ status, data, message }` envelope convention.
-
-### 1. Authentication Service (`/api/auth/*`)
-Manages user lifecycle, tokens, and profiles. Rate limits enforced via Redis (20 req/15 min for auth, 10 OTP req/hr).
-
-| Method | Endpoint | Auth Required | Input | Success Output | Description |
-| :--- | :--- | :---: | :--- | :--- | :--- |
-| `POST` | `/api/auth/register` | ❌ | Body: `{ "email", "password", "name" }` | `201` - `{ "status", "data": { "userId" }, "message" }` | Register new user, sends OTP to email |
-| `POST` | `/api/auth/verify-otp` | ❌ | Body: `{ "email", "otp" }` | `200` - `{ "status", "data": { "user", "token", "refreshToken" } }` | Verify OTP & receive JWT |
-| `POST` | `/api/auth/resend-otp` | ❌ | Body: `{ "email" }` | `200` - `{ "status", "data": null, "message" }` | Resend OTP (10/hr limit) |
-| `POST` | `/api/auth/login` | ❌ | Body: `{ "email", "password" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Login with email + password |
-| `POST` | `/api/auth/refresh` | ❌ | Body: `{ "refreshToken" }` | `200` - `{ "status", "data": { "token", "refreshToken" } }` | Refresh JWT tokens |
-| `POST` | `/api/auth/logout` | ❌ | None | `200` - `{ "status", "data": null, "message" }` | Logout & invalidate refresh token |
-| `POST` | `/api/auth/forgot-password` | ❌ | Body: `{ "email" }` | `200` - `{ "status", "data": null, "message" }` | Send password reset link |
-| `POST` | `/api/auth/reset-password` | ❌ | Body: `{ "token", "newPassword" }` | `200` - `{ "status", "data": null, "message" }` | Reset password with token |
-| `GET` | `/api/auth/me` | ✅ | Header: `Authorization: Bearer <token>` | `200` - `{ "status", "data": { "id", "email", "name", "is_verified" } }` | Get current user profile |
-| `PATCH` | `/api/auth/profile` | ✅ | Body: `{ "name", "avatar_url" }` | `200` - `{ "status", "data": { "id", "name" }, "message" }` | Update profile |
-| `POST` | `/api/auth/change-password` | ✅ | Body: `{ "oldPassword", "newPassword" }` | `200` - `{ "status", "data": null, "message" }` | Change password |
-| `DELETE` | `/api/auth/account` | ✅ | None | `200` - `{ "status", "data": null, "message" }` | Permanently delete account |
-
-### 2. Project Service (`/api/projects/*` & `/api/schema/*`)
-Handles workspaces, schemas, table configuration, RBAC members, invitations, notifications, and API keys. All routes require `Authorization: Bearer <token>` unless noted.
-
-#### Projects
-| Method | Endpoint | Role Required | Input | Success Output | Description |
-| :--- | :--- | :---: | :--- | :--- | :--- |
-| `GET` | `/api/projects/` | any | — | `200` - `[ { "id", "name", "role", "createdAt" } ]` | List my projects (cached in Redis) |
-| `POST` | `/api/projects/` | any | Body: `{ "name", "description"? }` | `201` - `{ "id", "schema_name" }` | Create project + auto DB schema |
-| `GET` | `/api/projects/:projectId` | any | Param: `projectId` | `200` - `{ "id", "name", "ownerId", "schema" }` | Get project details |
-| `PATCH` | `/api/projects/:projectId` | admin | Body: `{ "name"?, "description"? }` | `200` - updated project | Update project |
-| `DELETE` | `/api/projects/:projectId` | admin | Param: `projectId` | `200` - `{ "message" }` | Delete project + drops schema |
-| `GET` | `/api/projects/validate-api-key` | — | Header: `x-api-key` | `200` / `401` | Internal Nginx auth_request endpoint |
-
-#### Schema & Tables
-| Method | Endpoint | Role Required | Input | Success Output | Description |
-| :--- | :--- | :---: | :--- | :--- | :--- |
-| `GET` | `/api/schema/:projectId` | any | Param: `projectId` | `200` - `{ "schema": [ { "table", "columns" } ] }` | Full schema structure |
-| `GET` | `/api/projects/:projectId/tables` | any | Param: `projectId` | `200` - `[ "tableName", ... ]` | List tables in project schema |
-| `POST` | `/api/projects/:projectId/tables` | admin/editor | Body: `{ "tableName", "columns": [ { "name", "type", "constraints" } ] }` | `201` - `{ "message" }` | Create table |
-| `GET` | `/api/projects/:projectId/tables/:tableName` | any | Params | `200` - `{ "columns": [ { "name", "type", "nullable" } ] }` | Get table column details |
-| `PATCH` | `/api/projects/:projectId/tables/:tableName` | admin/editor | Body: `{ "actions": [ { "type", "column", ... } ] }` | `200` - `{ "message" }` | Alter table (add/drop/rename columns) |
-| `DELETE` | `/api/projects/:projectId/tables/:tableName` | admin | Params | `200` - `{ "message" }` | Drop table |
-
-#### Table Data (UI CRUD)
-| Method | Endpoint | Role Required | Input | Success Output | Description |
-| :--- | :--- | :---: | :--- | :--- | :--- |
-| `GET` | `/api/projects/:projectId/tables/:tableName/data` | any | Query: `?limit=50&offset=0` | `200` - `[ { ...row } ]` | Paginated row read |
-| `POST` | `/api/projects/:projectId/tables/:tableName/data` | admin/editor | Body: `{ "row": { ... } }` | `201` - inserted row | Insert row |
-| `PATCH` | `/api/projects/:projectId/tables/:tableName/rows` | admin/editor | Body: `{ "id", "updates": { ... } }` | `200` - `{ "message" }` | Update row by id |
-| `DELETE` | `/api/projects/:projectId/tables/:tableName/rows` | admin/editor | Body or Query: `{ "id" }` | `200` - `{ "message" }` | Delete row by id |
-
-#### Members & Roles
-| Method | Endpoint | Role Required | Input | Success Output | Description |
-| :--- | :--- | :---: | :--- | :--- | :--- |
-| `GET` | `/api/projects/:projectId/members` | any | — | `200` - `[ { "userId", "email", "role" } ]` | List project members |
-| `POST` | `/api/projects/:projectId/members` | admin | Body: `{ "email", "role" }` | `201` - `{ "message" }` | Invite member (sends email) |
-| `PATCH` | `/api/projects/:projectId/members/:memberId` | admin | Body: `{ "role" }` | `200` - `{ "message" }` | Update member role |
-| `DELETE` | `/api/projects/:projectId/members/:memberId` | admin | Params | `200` - `{ "message" }` | Remove member |
-
-#### Invitations
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/projects/invitations/mine` | List all pending invitations for the logged-in user |
-| `POST` | `/api/projects/invitations/accept/:token` | Accept an invitation by token |
-| `POST` | `/api/projects/invitations/decline/:token` | Decline an invitation by token |
-| `GET` | `/api/projects/:projectId/invitations` | *(admin)* List all pending invitations for a project |
-| `POST` | `/api/projects/:projectId/invitations` | *(admin)* Send an invitation email to a user |
-
-#### Notifications
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/projects/notifications` | List all notifications for the current user |
-| `GET` | `/api/projects/notifications/unread-count` | Get count of unread notifications |
-| `GET` | `/api/projects/notifications/stream` | **SSE stream** — real-time notification push (Redis Pub/Sub) |
-| `PATCH` | `/api/projects/notifications/mark-all-read` | Mark all notifications as read |
-| `PATCH` | `/api/projects/notifications/:notificationId/read` | Mark a single notification as read |
-
-#### API Keys
-| Method | Endpoint | Role Required | Description |
-| :--- | :--- | :---: | :--- |
-| `GET` | `/api/projects/:projectId/keys` | any | List API keys (prefix only, not full key) |
-| `POST` | `/api/projects/:projectId/keys` | admin | Generate a new API key (returned once, hashed in DB) |
-| `DELETE` | `/api/projects/:projectId/keys/:keyId` | admin | Revoke an API key |
-
-### 3. Database Service (`/api/query/*`)
-
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/query/execute` | Body: `{ "projectId", "query" }` | `200` - `{ "rows", "rowCount", "executionTimeMs" }` | Execute raw SQL against project schema |
-| `GET` | `/api/query/history` | Query: `?projectId=uuid` | `200` - `[ { "query_text", "query_status", "execution_time_ms", "created_at" } ]` | Query history for a project |
-| `GET` | `/api/query/audit-logs` | Query: `?projectId=uuid` | `200` - `[ { "action_type", "details", "actor_id", "ip_address", "created_at" } ]` | Project audit log |
-
-### 4. Analytics Service (`/api/analytics/*`)
-
-| Method | Endpoint | Input | Success Output | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/api/analytics/tables` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ "users", "orders" ] }` | List analytics tables |
-| `GET` | `/api/analytics/tables/:tableName/columns` | Query: `?projectId=uuid` | `200` - `{ "status", "data": [ { "name", "type" } ] }` | List columns |
-| `GET` | `/api/analytics/chart` | Query: `?projectId`, `tableName`, `xAxis`, `yAxis`, `aggregation` | `200` - `{ "status", "data": [ { "label", "value" } ] }` | Chart data |
-| `GET` | `/api/analytics/stats` | Query: `?projectId`, `tableName` | `200` - `{ "status", "data": { "totalRecords", "recentlyAdded" } }` | Table stats |
-| `GET` | `/api/analytics/dashboard` | Query: `?projectId=uuid` | `200` - `{ "status", "data": { "layout", "widgets" } }` | Get dashboard config |
-| `POST` | `/api/analytics/dashboard` | Body: `{ "projectId", "layout", "widgets" }` | `200` - `{ "status", "data": null, "message" }` | Save dashboard config |
-
-### 5. PostgREST Auto-Generated API (`/api/rest/*`)
-
-The PostgREST API gives you instant, high-performance REST access to your project tables. Every request is authenticated via an API key — no cookies or JWT tokens needed.
-
-#### Authentication
-
-Include your API key in every request:
-```bash
-curl -H "x-api-key: YOUR_API_KEY" http://YOUR_DOMAIN/api/rest/your_table
-```
-
-Generate API keys from: **Dashboard → API Keys → Generate New Key**
-
-#### Read Records
-
-```bash
-# Get all rows
-curl http://YOUR_DOMAIN/api/rest/users -H "x-api-key: YOUR_KEY"
-
-# Select specific columns
-curl "http://YOUR_DOMAIN/api/rest/users?select=id,email" -H "x-api-key: YOUR_KEY"
-
-# Filter: exact match
-curl "http://YOUR_DOMAIN/api/rest/users?id=eq.5" -H "x-api-key: YOUR_KEY"
-
-# Filter: greater than
-curl "http://YOUR_DOMAIN/api/rest/users?age=gt.18" -H "x-api-key: YOUR_KEY"
-
-# Filter: pattern match (case-insensitive)
-curl "http://YOUR_DOMAIN/api/rest/users?name=ilike.*john*" -H "x-api-key: YOUR_KEY"
-
-# Sort + Pagination
-curl "http://YOUR_DOMAIN/api/rest/users?order=created_at.desc&limit=10&offset=0" -H "x-api-key: YOUR_KEY"
-```
-
-#### Insert Records
-
-```bash
-# Single row
-curl -X POST http://YOUR_DOMAIN/api/rest/users \
-  -H "x-api-key: YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -H "Prefer: return=representation" \
-  -d '{"full_name": "John Doe", "email": "john@example.com"}'
-
-# Multiple rows
-curl -X POST http://YOUR_DOMAIN/api/rest/users \
-  -H "x-api-key: YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '[{"full_name": "Alice"}, {"full_name": "Bob"}]'
-```
-
-#### Update Records
-
-```bash
-curl -X PATCH "http://YOUR_DOMAIN/api/rest/users?id=eq.1" \
-  -H "x-api-key: YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"full_name": "Updated Name"}'
-```
-
-> ⚠️ Always include a filter (`?id=eq.X`), otherwise ALL rows will be updated.
-
-#### Delete Records
-
-```bash
-curl -X DELETE "http://YOUR_DOMAIN/api/rest/users?id=eq.1" \
-  -H "x-api-key: YOUR_KEY"
-```
-
-> ⚠️ Always include a filter, otherwise ALL rows will be deleted.
-
-#### JavaScript Example
-
-```javascript
-const API_URL = "http://YOUR_DOMAIN/api/rest";
-const headers = {
-  "x-api-key": "YOUR_KEY",
-  "Content-Type": "application/json",
-  "Prefer": "return=representation",
-};
-
-// Read
-const users = await fetch(`${API_URL}/users`, { headers }).then(r => r.json());
-
-// Insert
-const newUser = await fetch(`${API_URL}/users`, {
-  method: "POST", headers,
-  body: JSON.stringify({ full_name: "New User", email: "new@test.com" }),
-}).then(r => r.json());
-
-// Update
-await fetch(`${API_URL}/users?id=eq.${newUser[0].id}`, {
-  method: "PATCH", headers,
-  body: JSON.stringify({ full_name: "Updated" }),
-});
-
-// Delete
-await fetch(`${API_URL}/users?id=eq.${newUser[0].id}`, {
-  method: "DELETE", headers,
-});
-```
-
-#### Filter Operators Reference
-
-| Operator | Meaning | Example |
-|----------|---------|---------|
-| `eq` | Equals | `?id=eq.5` |
-| `neq` | Not equal | `?status=neq.deleted` |
-| `gt` / `lt` | Greater / Less than | `?age=gt.18` |
-| `gte` / `lte` | Greater/Less or equal | `?price=lte.100` |
-| `like` | Pattern match (case-sensitive) | `?name=like.*john*` |
-| `ilike` | Pattern match (case-insensitive) | `?name=ilike.*john*` |
-| `in` | In list | `?status=in.(active,pending)` |
-| `is` | IS (null/true/false) | `?deleted_at=is.null` |
-
-#### Response Codes
-
-| Code | Meaning |
-|------|---------|
-| `200` | Success (GET, PATCH) |
-| `201` | Created (POST with `Prefer: return=representation`) |
-| `204` | Success, no content returned |
-| `401` | Invalid or missing API key |
-| `404` | Table not found |
-| `409` | Unique constraint violation |
-
-## Installation & Local Setup
-
-Docker Compose orchestrates the entire application. Follow these steps to get up and running locally in minutes.
-
-### Prerequisites
-
-| Tool | Minimum Version | Purpose |
-|------|----------------|---------|
-| Docker | 24.x | Container runtime |
-| Docker Compose | v2.x | Multi-container orchestration |
-| Git | 2.x | Source control |
-| (Optional) Terraform | 1.7+ | AWS infrastructure provisioning |
-| (Optional) AWS CLI | 2.x | AWS credential management |
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/ayushsoni1010/rapidbase.git
-cd rapidbase
-```
-
-### 2. Configure Environment Variables
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and fill in all required values:
-
-| Variable | Description |
-|----------|------------|
-| `POSTGRES_PASSWORD` | Strong password for PostgreSQL (min 32 chars) |
-| `JWT_SECRET` | Random string, min 64 chars — use `openssl rand -hex 64` |
-| `JWT_REFRESH_SECRET` | Random string, min 64 chars |
-| `COOKIE_SECRET` | Random string, min 32 chars |
-| `REDIS_PASSWORD` | Redis password |
-| `SMTP_HOST / SMTP_USER / SMTP_PASS` | Real SMTP creds for OTP emails (leave blank for Ethereal dev mode) |
-
-> **Tip:** Generate secrets fast: `openssl rand -hex 64`
-
-### 3. Start the Platform
-
-```bash
-docker compose up -d
-```
-
-All images (PostgreSQL, Redis, Auth, Project, Database, Analytics, Nginx, Next.js) will pull from Docker Hub automatically.
-
-| Service | URL |
-|---------|-----|
-| Frontend Dashboard | http://localhost/ |
-| Backend APIs (via Nginx) | http://localhost/api/* |
-| PostgREST Auto-API | http://localhost/api/rest/* |
-
-### 4. Rebuild After Code Changes (Local Dev Only)
-
-```bash
-# Rebuild specific service
-docker compose up -d --build auth-service
-
-# Rebuild everything
-docker compose up -d --build
-```
+> **Note:** OTP codes and refresh tokens are stored in **Redis** (not PostgreSQL) for fast access and automatic TTL expiry.
 
 ---
 
-## CI/CD Pipeline — GitHub Actions
+## 🔄 CI/CD Pipeline — GitHub Actions
 
-The pipeline lives at [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and triggers on every push or PR to `main`.
-
-### Pipeline Stages
+The pipeline at [`.github/workflows/ci.yml`](.github/workflows/ci.yml) triggers on every push/PR to `main`:
 
 ```
 Push to main
     │
     ▼
 ┌──────────────────────┐
-│  1. Filesystem Scan  │  ← Trivy scans source code for HIGH/CRITICAL CVEs
+│  1. Filesystem Scan  │  ← Trivy scans for HIGH/CRITICAL CVEs
 └──────────┬───────────┘
-           │ (on pass)
+           │
     ┌──────▼──────────────────────────┐
-    │  2. Build & Push (matrix x 6)   │  ← Parallel per service:
-    │                                 │    docker build → Trivy image scan → docker push
-    │  auth-service                   │
-    │  project-service                │
-    │  database-service               │
-    │  analytics-service              │
-    │  nginx-gateway                  │
-    │  frontend                       │
+    │  2. Build & Push (6 services)   │  ← Parallel: build → scan → push
+    │  auth · project · database      │
+    │  analytics · nginx · frontend   │
     └──────┬──────────────────────────┘
-           │ (all pass)
+           │
     ┌──────▼──────────────────┐
-    │  3. Success Notification │  ← Email sent via Gmail SMTP
+    │  3. Email Notification  │  ← Success/failure via Gmail SMTP
     └─────────────────────────┘
 ```
 
-Each service is tagged with both a unique run ID (`<run_id>-<short_sha>`) and `:latest`. Failure at any stage sends an HTML alert email with the scan report attached.
+### Required GitHub Secrets
 
-### Required GitHub Repository Secrets
+| Secret | Description |
+|--------|-------------|
+| `DOCKERHUB_USERNAME` | Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub Access Token |
+| `MAIL_USERNAME` | Gmail address for CI alerts |
+| `MAIL_PASSWORD` | Gmail App Password |
+| `ALERT_EMAIL_ADDRESS` | Recipient email |
 
-Go to **Settings → Secrets and variables → Actions → New repository secret** and add:
-
-| Secret Name | Description |
-|-------------|------------|
-| `DOCKERHUB_USERNAME` | Your Docker Hub username |
-| `DOCKERHUB_TOKEN` | Docker Hub Access Token (not your password) — create at hub.docker.com → Security |
-| `MAIL_USERNAME` | Gmail address used to send CI alerts |
-| `MAIL_PASSWORD` | Gmail App Password (not your account password) — create at myaccount.google.com → Security → App passwords |
-| `ALERT_EMAIL_ADDRESS` | Recipient email for CI success/failure notifications |
-
-### Generating a Gmail App Password
-
-1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-2. Select **Mail** and **Other (Custom name)** → enter "RapidBase CI"
-3. Copy the 16-character password → use as `MAIL_PASSWORD`
-
-### Pulling the Latest Images on Your Server
-
-After CI has pushed new images, SSH into your EC2 instance and run:
+### Deploy to Server
 
 ```bash
+# After CI pushes new images:
 docker compose pull && docker compose up -d
 ```
 
 ---
 
-## Infrastructure as Code — Terraform (AWS)
+## ☁️ Infrastructure — Terraform (AWS)
 
-All AWS infrastructure is defined in the [`terraform/`](./terraform/) directory. The setup provisions:
-- An EC2 instance (default: `m7i-flex.large`, 30 GB gp3 SSD)
-- A security group with ports 22 (SSH), 80 (HTTP), 5050 (pgAdmin), 8001 (Redis Commander)
-- An SSH key pair from your local public key
-- Docker auto-installed via the `scripts/install_docker.sh` user-data script
-
-### Prerequisites
-
-```bash
-# Install Terraform
-sudo apt-get install -y gnupg software-properties-common
-wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update && sudo apt-get install terraform
-
-# Configure AWS credentials
-aws configure
-# Enter: AWS Access Key ID, Secret Key, Region (e.g. ap-south-1), output format (json)
-```
-
-### Deploy Infrastructure
+The [`terraform/`](./terraform/) directory provisions:
+- EC2 instance (`m7i-flex.large`, 30GB gp3 SSD)
+- Security group (ports 22, 80, 5050, 8001)
+- SSH key pair + Docker auto-install
 
 ```bash
 cd terraform/
-
-# 1. Initialize providers & modules
 terraform init
-
-# 2. Preview the changes
 terraform plan
-
-# 3. Apply — creates EC2 instance, security group, and key pair
 terraform apply
 ```
 
-After `apply`, Terraform outputs:
-```
-public_ip  = "X.X.X.X"
-public_dns = "ec2-X-X-X-X.ap-south-1.compute.amazonaws.com"
-```
-
-### Connect & Deploy to EC2
+After apply → SSH in → clone repo → `docker compose up -d`.
 
 ```bash
-# SSH into the instance (Docker is auto-installed via user-data)
-ssh -i ../rapidbase_ssh_key ubuntu@<public_ip>
-
-# On the EC2 instance — clone the repo and start services
-git clone https://github.com/ayushsoni1010/rapidbase.git
-cd rapidbase
-cp .env.example .env
-nano .env          # fill in your production secrets
-docker compose up -d
-```
-
-### Configurable Terraform Variables
-
-Defaults are in [`terraform/variable.tf`](./terraform/variable.tf). Override with `-var` or a `terraform.tfvars` file:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ami_id` | `ami-03446a3af42c5e74e` | Ubuntu 22.04 LTS AMI (ap-south-1) |
-| `instance_type` | `m7i-flex.large` | EC2 instance type |
-| `root_storage` | `30` | Root EBS volume size in GB |
-
-```bash
-# Example — override instance type
-terraform apply -var="instance_type=t3.medium"
-```
-
-### Tear Down Infrastructure
-
-```bash
-cd terraform/
+# Tear down
 terraform destroy
 ```
 
-> ⚠️ This will permanently delete your EC2 instance and all associated resources. Backup your data first.
+---
+
+## 📂 Project Structure
+
+```
+rapidbase/
+├── frontend/              # Next.js dashboard (App Router + TailwindCSS v4)
+├── services/
+│   ├── nginx-gateway/     # Nginx config (reverse proxy + JWT validation)
+│   ├── auth-service/      # Registration, login, OTP, JWT, password reset (Distroless)
+│   ├── project-service/   # Projects, tables, members, invitations, API keys (Distroless)
+│   ├── database-service/  # SQL execution, query history, audit logs (Distroless)
+│   └── analytics-service/ # Charts, stats, dashboard CRUD (Distroless)
+├── docker/
+│   └── postgres/init.sql  # Database initialization script
+├── terraform/             # AWS infrastructure (EC2 + Security Group)
+├── .github/workflows/     # CI/CD pipeline
+├── docker-compose.yml     # Full platform orchestration
+└── .env.example           # Environment template
+```
 
 ---
 
-## License
+## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for full text.
+This project is licensed under the **MIT License** — see [LICENSE](./LICENSE).
 
 ```
-MIT License
-
-Copyright (c) 2026 Ayush Soni
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+MIT License — Copyright (c) 2026 Ayush Soni
 ```
+]]>

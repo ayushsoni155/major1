@@ -93,10 +93,18 @@ function CodeBlock({ children, language = "bash", copyText }) {
 
 // --- Data ---
 const FEATURES = [
-  { icon: Database, title: "Instant REST API", desc: "Auto-generated REST endpoints via PostgREST. Always in sync with your schema. Zero configuration.", colSpan: "md:col-span-2", color: "text-violet-400", glow: "rgba(139,92,246,0.2)" },
-  { icon: Shield, title: "Row-Level Security", desc: "True multi-tenant data isolation built right into PostgreSQL itself.", colSpan: "md:col-span-1", color: "text-indigo-400", glow: "rgba(99,102,241,0.2)" },
-  { icon: Key, title: "API Keys", desc: "Scoped API keys with permission controls, expiries, and origin whitelisting.", colSpan: "md:col-span-1", color: "text-cyan-400", glow: "rgba(34,211,238,0.2)" },
-  { icon: Code2, title: "SQL Editor", desc: "Write raw SQL queries with syntax highlighting and instant execution feedback.", colSpan: "md:col-span-2", color: "text-emerald-400", glow: "rgba(52,211,153,0.2)" },
+  { icon: Database, title: "Auto-Generated REST API", desc: "PostgREST instantly turns your tables into a full REST API at /api/rest/. Create a table, get CRUD endpoints — zero config.", colSpan: "md:col-span-2", color: "text-violet-400", glow: "rgba(139,92,246,0.2)" },
+  { icon: Shield, title: "Multi-Tenant Isolation", desc: "Every project gets its own PostgreSQL schema. Complete data isolation — no cross-project access ever.", colSpan: "md:col-span-1", color: "text-indigo-400", glow: "rgba(99,102,241,0.2)" },
+  { icon: Key, title: "JWT API Keys", desc: "Generate scoped JWT tokens with granular permissions (read, insert, update, delete) and origin whitelisting.", colSpan: "md:col-span-1", color: "text-cyan-400", glow: "rgba(34,211,238,0.2)" },
+  { icon: Code2, title: "SQL Editor", desc: "Execute raw SQL queries with syntax highlighting, query history, and execution time tracking.", colSpan: "md:col-span-1", color: "text-emerald-400", glow: "rgba(52,211,153,0.2)" },
+  { icon: Lock, title: "Authentication System", desc: "Built-in JWT auth with OTP email verification, refresh tokens, password reset, and session management.", colSpan: "md:col-span-1", color: "text-amber-400", glow: "rgba(251,191,36,0.2)" },
+  { icon: Users, title: "Team Collaboration", desc: "Invite members with Admin, Editor, or Viewer roles. Email invitations with accept/decline workflow.", colSpan: "md:col-span-1", color: "text-pink-400", glow: "rgba(244,114,182,0.2)" },
+  { icon: BarChart3, title: "Analytics Dashboard", desc: "Build custom charts and widgets from your data. Drag-and-drop dashboard layouts saved per project.", colSpan: "md:col-span-1", color: "text-orange-400", glow: "rgba(251,146,60,0.2)" },
+  { icon: Globe, title: "Real-time Notifications", desc: "Server-Sent Events via Redis Pub/Sub for instant in-app alerts on invitations and project updates.", colSpan: "md:col-span-1", color: "text-sky-400", glow: "rgba(56,189,248,0.2)" },
+  { icon: Layers, title: "Schema Visualization", desc: "Interactive ER diagrams showing all tables, columns, and relationships using React Flow.", colSpan: "md:col-span-1", color: "text-teal-400", glow: "rgba(45,212,191,0.2)" },
+  { icon: Server, title: "Audit Logging", desc: "Every action tracked — table changes, member updates, SQL queries — with IP address and timestamps.", colSpan: "md:col-span-2", color: "text-rose-400", glow: "rgba(251,113,133,0.2)" },
+  { icon: GitBranch, title: "CI/CD Pipeline", desc: "GitHub Actions pipeline with Trivy vulnerability scanning, Docker builds, and auto-push to Docker Hub.", colSpan: "md:col-span-1", color: "text-lime-400", glow: "rgba(163,230,53,0.2)" },
+  { icon: Cpu, title: "Redis Caching", desc: "OTP codes, API key validation, project lists, and rate limiting all cached in Redis for blazing speed.", colSpan: "md:col-span-1", color: "text-fuchsia-400", glow: "rgba(232,121,249,0.2)" },
 ];
 
 const HOW_IT_WORKS = [
@@ -119,148 +127,174 @@ const DOCS_CONTENT = {
     icon: Rocket,
     color: "text-violet-400",
     steps: [
-      { title: "Sign up & Create Project", desc: "Create a free account and hit 'New Project'. Choose your region — your PostgreSQL instance is ready in under 30 seconds.", code: null },
-      { title: "Design your tables", desc: "Navigate to Tables → Create Table. Add columns with the visual builder or use the SQL Editor directly.", code: null },
-      { title: "Get your API key", desc: "Under API Keys, generate a new key. Copy the key and your project's REST endpoint URL.", code: `# Your project endpoint looks like:
-https://your-domain.com/rest/v1
+      { title: "Sign up & Create Project", desc: "Create a free account and hit 'New Project'. Your project gets a dedicated PostgreSQL schema instantly — fully isolated from all other projects.", code: null },
+      { title: "Design your tables", desc: "Navigate to Tables → Create Table. Add columns with the visual builder or write SQL directly in the built-in SQL Editor.", code: null },
+      { title: "Generate an API Key", desc: "Go to API Keys tab → Generate New Key. Choose permissions (read, insert, update, delete). Your key is a JWT token.", code: `# Your API key is a JWT token like:
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# With your API Key header:
-x-api-key: rb_live_xxxxxxxxxxxxxxxxxxxx` },
-      { title: "Make your first request", desc: "Use curl, fetch, or any HTTP client to query your data instantly.", code: `curl "https://your-domain.com/rest/v1/users?select=*" \\
-  -H "x-api-key: rb_live_xxxx" \\
-  -H "Accept: application/json"` },
+# It encodes: project schema, permissions, and origin
+# Use it via Authorization header:
+Authorization: Bearer <your_jwt_token>` },
+      { title: "Query your data", desc: "Use curl, fetch, or any HTTP client to read/write your data via the auto-generated REST API.", code: `# Read all rows from your 'users' table
+curl "https://your-domain.com/api/rest/users" \\
+  -H "Authorization: Bearer <your_jwt_token>"
+
+# Response: [{"id":1,"name":"Alice",...}]` },
     ]
   },
   "Security & RLS": {
     icon: Shield,
     color: "text-emerald-400",
     steps: [
-      { title: "Row-Level Security (RLS)", desc: "RapidBase provisions every project as a PostgreSQL schema with native RLS. Your data is completely isolated from other projects — zero cross-contamination.", code: null },
-      { title: "API Key Scoping", desc: "Each API key can be restricted by origin URL. Keys that are restricted will only work from that specific domain via CORS enforcement.", code: `# Restrict a key to your domain:
-POST /projects/{id}/keys
+      { title: "Schema Isolation", desc: "Every project gets a unique PostgreSQL schema (e.g. proj_ki1jw9xf). Your JWT token is locked to this schema — cross-project access is impossible.", code: null },
+      { title: "Permission Enforcement", desc: "Each API key has specific permissions. A read-only key cannot insert data. An insert-only key cannot read. Enforced at the gateway level.", code: `# API Key with [read] permission:
+GET  /api/rest/users → 200 OK ✅
+POST /api/rest/users → 403 Forbidden ❌
+
+# API Key with [insert] permission:
+POST /api/rest/users → 201 Created ✅
+GET  /api/rest/users → 403 Forbidden ❌` },
+      { title: "Origin Whitelisting", desc: "Restrict API keys to specific domains. Localhost is always allowed for development. Production keys only work from your app's domain.", code: `# When generating a key, set origin:
 {
   "key_name": "Production App",
+  "permissions": ["read", "insert"],
   "origin_url": "https://myapp.com"
-}` },
-      { title: "No Shared Credentials", desc: "Your PostgreSQL credentials are never exposed. All access goes through our authenticated gateway which validates API keys on every request.", code: null },
-      { title: "Audit Logging", desc: "Every SQL query executed via the API is logged with timestamp, execution time, and status. Review the Audit Log in your dashboard.", code: null },
+}
+# Requests from other domains → 403` },
+      { title: "Audit Trail", desc: "Every action is logged — table creates/drops, member changes, SQL queries, API key usage — all with IP address and timestamp.", code: null },
     ]
   },
   "PostgREST API": {
     icon: Globe,
     color: "text-cyan-400",
     steps: [
-      { title: "Base URL", desc: "All REST requests go to your project's endpoint. The path after /rest/v1/ is your table name.", code: `GET  /rest/v1/{table}           # Read rows
-POST /rest/v1/{table}           # Insert row
-PATCH /rest/v1/{table}?id=eq.1 # Update row
-DELETE /rest/v1/{table}?id=eq.1 # Delete row` },
-      { title: "Filtering & Operators", desc: "Use query parameters for filters. PostgREST supports all comparison operators natively.", code: `# Equals
-GET /rest/v1/users?age=eq.25
+      { title: "Endpoints", desc: "All REST requests go to /api/rest/{table_name}. Use HTTP methods for CRUD operations. Auth via Bearer token.", code: `# Base URL: https://your-domain.com/api/rest
+
+GET    /api/rest/users              # Read rows
+POST   /api/rest/users              # Insert row(s)
+PATCH  /api/rest/users?id=eq.1      # Update row
+DELETE /api/rest/users?id=eq.1      # Delete row` },
+      { title: "Filtering & Operators", desc: "Use query parameters with PostgREST operators. Supports eq, neq, gt, lt, gte, lte, like, ilike, in, is.", code: `# Equals
+GET /api/rest/users?status=eq.active
 
 # Greater than
-GET /rest/v1/orders?total=gt.100
+GET /api/rest/orders?total=gt.100
 
-# String contains
-GET /rest/v1/products?name=ilike.*phone*
+# Pattern match (case-insensitive)
+GET /api/rest/users?name=ilike.*john*
 
-# Multiple filters
-GET /rest/v1/users?age=gte.18&role=eq.admin` },
-      { title: "Pagination & Sorting", desc: "Control result size and ordering via standard query params.", code: `# Paginate
-GET /rest/v1/users?limit=20&offset=40
+# Multiple filters (AND)
+GET /api/rest/users?age=gte.18&role=eq.admin
 
-# Sort ascending/descending
-GET /rest/v1/users?order=created_at.desc
+# IN list
+GET /api/rest/users?status=in.(active,pending)` },
+      { title: "Pagination & Sorting", desc: "Control result size and ordering. Use limit, offset, order, and select parameters.", code: `# Paginate: 10 results, skip 20 (page 3)
+GET /api/rest/users?limit=10&offset=20
 
-# Select specific columns
-GET /rest/v1/users?select=id,name,email` },
-      { title: "Insert & Upsert", desc: "Create or update records with JSON body. Use Prefer header to control response.", code: `# Insert
-curl -X POST /rest/v1/users \\
-  -H "x-api-key: rb_live_xxxx" \\
+# Sort descending by created_at
+GET /api/rest/users?order=created_at.desc
+
+# Select specific columns only
+GET /api/rest/users?select=id,name,email
+
+# Combine all
+GET /api/rest/users?select=id,name&order=name.asc&limit=5` },
+      { title: "Insert & Update", desc: "Send JSON body for inserts. Use Prefer header to get inserted data back. Always filter updates/deletes.", code: `# Insert a row (returns inserted data)
+curl -X POST "https://your-domain.com/api/rest/users" \\
+  -H "Authorization: Bearer <token>" \\
   -H "Content-Type: application/json" \\
+  -H "Prefer: return=representation" \\
   -d '{"name": "Alice", "email": "alice@example.com"}'
 
-# Upsert (on conflict update)
-curl -X POST /rest/v1/users \\
-  -H "Prefer: resolution=merge-duplicates" \\
-  -d '{"id": 1, "name": "Alice Updated"}'` },
+# Update (⚠️ always include a filter!)
+curl -X PATCH "https://your-domain.com/api/rest/users?id=eq.1" \\
+  -H "Authorization: Bearer <token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name": "Alice Updated"}'` },
     ]
   },
   "SDK & Integrations": {
     icon: Code2,
     color: "text-indigo-400",
     steps: [
-      { title: "JavaScript / TypeScript", desc: "Use any HTTP client. Here's a simple typed wrapper using fetch:", code: `const BASE = "https://your-domain.com/rest/v1";
-const KEY  = "rb_live_xxxxxxxxxxxx";
-
-const rb = {
-  from: (table) => ({
-    select: async (cols = "*") => {
-      const r = await fetch(\`\${BASE}/\${table}?select=\${cols}\`, {
-        headers: { "x-api-key": KEY }
-      });
-      return r.json();
-    },
-    insert: async (data) => {
-      const r = await fetch(\`\${BASE}/\${table}\`, {
-        method: "POST",
-        headers: { "x-api-key": KEY, "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
-      return r.json();
-    },
-  })
+      { title: "JavaScript / Fetch", desc: "Use the standard fetch API. Pass your JWT token in the Authorization header.", code: `const API = "https://your-domain.com/api/rest";
+const TOKEN = "your_jwt_token_here";
+const headers = {
+  "Authorization": \`Bearer \${TOKEN}\`,
+  "Content-Type": "application/json",
 };
 
-// Usage:
-const { data } = await rb.from("users").select("id,name");` },
-      { title: "Python", desc: "Use the requests library for simple integration:", code: `import requests
+// Read
+const users = await fetch(\`\${API}/users\`, { headers })
+  .then(r => r.json());
 
-BASE = "https://your-domain.com/rest/v1"
-HEADERS = {"x-api-key": "rb_live_xxxx"}
+// Insert
+await fetch(\`\${API}/users\`, {
+  method: "POST", headers,
+  body: JSON.stringify({ name: "Bob", email: "bob@test.com" }),
+});` },
+      { title: "Python", desc: "Use the requests library with Authorization Bearer header:", code: `import requests
 
-# Fetch all users
-resp = requests.get(f"{BASE}/users", headers=HEADERS)
-users = resp.json()
+API = "https://your-domain.com/api/rest"
+HEADERS = {"Authorization": "Bearer <your_jwt_token>"}
+
+# Read all users
+users = requests.get(f"{API}/users", headers=HEADERS).json()
 
 # Insert a record
-requests.post(f"{BASE}/users",
+requests.post(f"{API}/users",
   headers={**HEADERS, "Content-Type": "application/json"},
   json={"name": "Bob", "email": "bob@example.com"}
-)` },
-      { title: "React Hook (SWR)", desc: "Build a data-fetching hook with built-in caching:", code: `import useSWR from "swr";
+)
 
-const API = "https://your-domain.com/rest/v1";
-const KEY = "rb_live_xxxx";
+# Filter: get active users
+active = requests.get(
+  f"{API}/users?status=eq.active", headers=HEADERS
+).json()` },
+      { title: "React Hook (SWR)", desc: "Build a reusable data-fetching hook with caching and auto-refresh:", code: `import useSWR from "swr";
+
+const API = "https://your-domain.com/api/rest";
+const TOKEN = "your_jwt_token";
 
 const fetcher = (url) =>
-  fetch(url, { headers: { "x-api-key": KEY } }).then(r => r.json());
+  fetch(url, {
+    headers: { "Authorization": \`Bearer \${TOKEN}\` }
+  }).then(r => r.json());
 
 export function useTable(table, query = "") {
   const { data, error, mutate } = useSWR(
     \`\${API}/\${table}\${query ? "?" + query : ""}\`,
-    fetcher,
-    { refreshInterval: 10000 }
+    fetcher
   );
   return { data, isLoading: !data && !error, error, mutate };
 }
 
-// In your component:
+// Usage:
 const { data: users } = useTable("users", "select=id,name&limit=10");` },
-      { title: "cURL Quick Reference", desc: "All common operations in one place:", code: `# Read
-curl "$BASE/users?select=*&limit=10" -H "x-api-key: $KEY"
+      { title: "cURL Quick Reference", desc: "All CRUD operations with correct URLs and auth:", code: `TOKEN="your_jwt_token_here"
+BASE="https://your-domain.com/api/rest"
 
-# Create
+# Read all
+curl "$BASE/users" -H "Authorization: Bearer $TOKEN"
+
+# Read with filter
+curl "$BASE/users?age=gt.18&limit=10" -H "Authorization: Bearer $TOKEN"
+
+# Insert
 curl -X POST "$BASE/users" \\
-  -H "x-api-key: $KEY" -H "Content-Type: application/json" \\
-  -d '{"name":"Dave"}'
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Dave","email":"dave@test.com"}'
 
 # Update
 curl -X PATCH "$BASE/users?id=eq.5" \\
-  -H "x-api-key: $KEY" -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
   -d '{"name":"Dave Updated"}'
 
 # Delete
-curl -X DELETE "$BASE/users?id=eq.5" -H "x-api-key: $KEY"` },
+curl -X DELETE "$BASE/users?id=eq.5" \\
+  -H "Authorization: Bearer $TOKEN"` },
     ]
   }
 };
@@ -396,13 +430,13 @@ export default function LandingPage() {
             transition={{ delay: 1, duration: 0.8 }}
             className="w-full max-w-2xl"
           >
-            <CodeBlock language="bash" copyText={`curl "https://api.yourdomain.com/rest/v1/users?select=*" -H "x-api-key: rb_live_xxxx"`}>
+            <CodeBlock language="bash" copyText={`curl "https://your-domain.com/api/rest/users?select=*" -H "Authorization: Bearer <your_token>"`}>
               <span className="text-violet-400 font-bold">curl</span>{" "}
-              <span className="text-emerald-300">"https://api.yourdomain.com/rest/v1/users?select=*"</span>{" "}
+              <span className="text-emerald-300">"https://your-domain.com/api/rest/users?select=*"</span>{" "}
               <span className="text-zinc-500">\</span>
               <br />
               {"  "}<span className="text-zinc-500">-H</span>{" "}
-              <span className="text-yellow-300">"x-api-key: rb_live_xxxx"</span>
+              <span className="text-yellow-300">"Authorization: Bearer &lt;your_jwt_token&gt;"</span>
               <br />
               <br />
               <span className="text-zinc-500"># → 200 OK</span>
@@ -511,7 +545,7 @@ export default function LandingPage() {
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {FEATURES.map((feature, idx) => (
+            {FEATURES.slice(0, 6).map((feature, idx) => (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 30 }}
@@ -536,6 +570,30 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
+
+          {/* Secondary Features Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
+            {FEATURES.slice(6).map((feature, idx) => (
+              <motion.div
+                key={idx + 6}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0, transition: { delay: idx * 0.08 } }}
+                viewport={{ once: true }}
+                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                className={`glass-card p-6 rounded-2xl flex items-start gap-4 overflow-hidden relative group ${feature.colSpan} border border-white/[0.07]`}
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-60 transition-all duration-500"
+                  style={{ background: `radial-gradient(circle, ${feature.glow} 0%, transparent 70%)` }} />
+                <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center flex-shrink-0 border border-white/10 group-hover:border-white/20 transition-colors">
+                  <feature.icon className={`w-5 h-5 ${feature.color}`} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold mb-1">{feature.title}</h3>
+                  <p className="text-white/45 leading-relaxed text-sm">{feature.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -553,7 +611,7 @@ export default function LandingPage() {
           <div className="w-full md:w-1/2 relative z-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 mb-6">
               <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">PostgREST Powered</span>
+              <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">PostgREST Powered — /api/rest/*</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-black mb-6 leading-tight">
               Instant APIs,<br />
@@ -564,7 +622,7 @@ export default function LandingPage() {
               Insert, filter, paginate, and order with ease natively through PostgREST.
             </p>
             <ul className="space-y-3 mb-8">
-              {["Built-in authentication & Row-Level Security", "Direct SQL execution available", "Interactive analytics dashboard", "Schema visualization & export"].map((item, i) => (
+              {["JWT API keys with scoped permissions", "Schema isolation per project", "Filter, sort, paginate via query params", "Auth via Authorization: Bearer header", "Interactive analytics dashboard", "SQL Editor with query history"].map((item, i) => (
                 <li key={i} className="flex items-center gap-3 text-white/75 font-medium text-sm">
                   <CheckCircle className="w-4 h-4 text-green-400 shadow-[0_0_10px_rgba(74,222,128,0.5)] rounded-full flex-shrink-0" /> {item}
                 </li>
@@ -578,9 +636,9 @@ export default function LandingPage() {
           </div>
 
           <div className="w-full md:w-1/2 relative z-10 space-y-3">
-            <CodeBlock language="bash" copyText={`curl "https://api.yourdomain.com/rest/v1/posts?select=id,title,author&order=created_at.desc&limit=5" -H "x-api-key: rb_live_xxxx"`}>
+            <CodeBlock language="bash" copyText={`curl "https://your-domain.com/api/rest/posts?select=id,title,author&order=created_at.desc&limit=5" -H "Authorization: Bearer <token>"`}>
               <span className="text-violet-400">curl</span>{" "}
-              <span className="text-green-300">"https://api.yourdomain.com/rest/v1/posts</span>
+              <span className="text-green-300">"https://your-domain.com/api/rest/posts</span>
               <span className="text-sky-300">?select=id,title,author</span>
               <span className="text-yellow-300">&order=created_at.desc</span>
               <span className="text-emerald-300">&limit=5</span>
@@ -588,7 +646,7 @@ export default function LandingPage() {
               <span className="text-zinc-500">\</span>
               <br />
               {"  "}<span className="text-zinc-500">-H</span>{" "}
-              <span className="text-yellow-300">"x-api-key: rb_live_xxxx"</span>
+              <span className="text-yellow-300">"Authorization: Bearer &lt;your_jwt_token&gt;"</span>
             </CodeBlock>
             <div className="text-center text-xs text-zinc-600 font-mono">↓ Response 200 OK (4ms)</div>
             <CodeBlock language="json" copyText={"[{\"id\":1,\"title\":\"Hello World\",\"author\":\"Alice\"}]"}>
@@ -798,18 +856,29 @@ export default function LandingPage() {
               </p>
             </div>
             {[
-              { title: "Product", links: ["Features", "How it Works", "Pricing", "Changelog"] },
-              { title: "Developers", links: ["Documentation", "API Reference", "PostgREST Guide", "SDK Examples"] },
-              { title: "Company", links: ["About", "Blog", "GitHub", "Contact"] },
+              { title: "Product", links: [
+                { label: "Features", href: "#features" },
+                { label: "How it Works", href: "#how-it-works" },
+                { label: "Documentation", href: "#docs" },
+              ] },
+              { title: "Developers", links: [
+                { label: "PostgREST API", href: "#docs" },
+                { label: "SDK Examples", href: "#docs" },
+                { label: "Support / FAQ", href: "/support" },
+              ] },
+              { title: "Company", links: [
+                { label: "GitHub", href: "https://github.com/ayushsoni1010/rapidbase" },
+                { label: "Contact", href: "mailto:support@rapidbase.io" },
+              ] },
             ].map((col) => (
               <div key={col.title}>
                 <h4 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">{col.title}</h4>
                 <ul className="space-y-2.5">
                   {col.links.map((link) => (
-                    <li key={link}>
-                      <a href="#" className="text-sm text-zinc-500 hover:text-white transition-colors flex items-center gap-1 group">
-                        {link}
-                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                    <li key={link.label}>
+                      <a href={link.href} className="text-sm text-zinc-500 hover:text-white transition-colors flex items-center gap-1 group">
+                        {link.label}
+                        {link.href.startsWith("http") && <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />}
                       </a>
                     </li>
                   ))}
