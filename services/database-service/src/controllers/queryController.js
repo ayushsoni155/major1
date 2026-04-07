@@ -13,18 +13,25 @@ const BLOCKED_SCHEMA_PREFIXES = [
 ];
 
 // DDL / admin operations that are always forbidden regardless of schema.
+// IMPORTANT: These are matched with WHOLE-WORD regex (word boundaries) so that
+// column / table names that merely contain these strings (e.g. "begin_date",
+// "grant_id", "commit_hash") do NOT trigger a false-positive block.
+// Allowed DML/DDL on the user's own schema: SELECT, INSERT, UPDATE, DELETE,
+// CREATE TABLE, ALTER TABLE, DROP TABLE, CREATE INDEX, etc.
 const FORBIDDEN_KEYWORDS = [
+  // Schema / database / role / user admin — structural, cross-tenant danger
   'DROP SCHEMA', 'CREATE SCHEMA', 'ALTER SCHEMA',
   'DROP DATABASE', 'CREATE DATABASE', 'ALTER DATABASE',
   'DROP ROLE', 'CREATE ROLE', 'ALTER ROLE',
-  'GRANT', 'REVOKE',
-  'SET ROLE', 'SET SESSION AUTHORIZATION',
   'DROP USER', 'CREATE USER', 'ALTER USER',
   'ALTER SYSTEM',
-  // Transaction control — the server wraps all statements in its own
-  // BEGIN/COMMIT. User-supplied transaction commands would break schema
-  // isolation (SET LOCAL only applies to the current transaction) and
-  // could leave the connection in an inconsistent state.
+  // Privilege management — must never be run by users
+  'GRANT', 'REVOKE',
+  // Role impersonation
+  'SET ROLE', 'SET SESSION AUTHORIZATION',
+  // Transaction control — the server manages its own BEGIN/COMMIT.
+  // Allowing user-supplied transaction commands would break SET LOCAL
+  // schema isolation and leave the connection in an inconsistent state.
   'BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE SAVEPOINT',
   // Prevent overriding the enforced search_path or statement_timeout
   'SET SEARCH_PATH', 'SET LOCAL SEARCH_PATH',
@@ -67,25 +74,63 @@ const parseStatements = (rawSql) => {
 };
 
 /**
+ * Strip both SQL comments AND single-quoted string literals from a query.
+ *
+ * This produces a sanitised string that is ONLY used for security checks
+ * (forbidden keywords, cross-schema refs). It is never executed.
+ *
+ * Why: Without stripping string literals, a user value like
+ *   INSERT INTO logs (msg) VALUES ('BEGIN a new session')
+ * would falsely match the BEGIN keyword check. Similarly a comment could
+ * be used to smuggle a forbidden keyword past a naive scan.
+ */
+const sanitiseForChecks = (sql) =>
+  sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')   // block comments
+    .replace(/--[^\r\n]*/g, ' ')           // line comments
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''");  // string literals → empty strings
+
+/**
+ * Build a whole-word regex for a keyword phrase such as "BEGIN" or
+ * "DROP SCHEMA". Spaces in keyword phrases are matched as \s+ to handle
+ * any amount of whitespace between the words.
+ *
+ * Using \b (word boundary) means "BEGIN" only matches the standalone SQL
+ * keyword, NOT substrings like "begin_date", "commit_hash", "grant_id".
+ */
+const buildKeywordRegex = (keyword) => {
+  const escaped = keyword
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // escape regex special chars
+    .replace(/\s+/g, '\\s+');               // allow flexible whitespace
+  return new RegExp(`\\b${escaped}\\b`, 'i');
+};
+
+/** Pre-compiled regex map for all forbidden keywords (built once at startup). */
+const FORBIDDEN_KEYWORD_REGEXES = FORBIDDEN_KEYWORDS.map((kw) => ({
+  keyword: kw,
+  regex: buildKeywordRegex(kw),
+}));
+
+/**
  * Detect schema-qualified references that cross schema boundaries.
  *
  * Strategy:
  *  1. Strip string literals so we don't false-positive on data values.
  *  2. Find every `word.word` token.
- *  3. Allow single-letter and common short table-alias prefixes (e.g. `t.id`, `a.name`).
+ *  3. Allow table aliases (t.id, a.name, etc.) — they won't match blocked schema names.
  *  4. Block if the left side matches a known dangerous schema name.
  *
- * This replaces the old `/\b\w+\.\w+/i` which incorrectly blocked
- * every JOIN that used a table alias (e.g. `SELECT t.id FROM orders t`).
+ * This approach lets users write JOINs with table-qualified columns:
+ *   SELECT o.id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id
+ * while still blocking explicit schema prefixes like `public.users`.
  */
-const detectForbiddenSchemaRef = (sql, ownSchemaName) => {
-  // Remove single-quoted strings to avoid matching data values
-  const stripped = sql.replace(/'(?:[^'\\]|\\.)*'/g, "''");
+const detectForbiddenSchemaRef = (sanitisedSql, ownSchemaName) => {
+  // sanitisedSql already has string literals removed by sanitiseForChecks()
 
   // Match word.word tokens (table.column or schema.table patterns)
   const dotPattern = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\.\s*([a-zA-Z_][a-zA-Z0-9_]*)/g;
   let match;
-  while ((match = dotPattern.exec(stripped)) !== null) {
+  while ((match = dotPattern.exec(sanitisedSql)) !== null) {
     const left = match[1].toLowerCase();
     // Block if left side is an explicitly known dangerous system/global schema
     if (BLOCKED_SCHEMA_PREFIXES.includes(left)) {
@@ -94,7 +139,7 @@ const detectForbiddenSchemaRef = (sql, ownSchemaName) => {
     // Block if left side matches the project's own schema name
     // (users should use bare table names, not explicit schema prefixes)
     if (ownSchemaName && left === ownSchemaName.toLowerCase()) {
-      return `Schema-qualified reference using the project schema prefix is not allowed. Use bare table names instead.`;
+      return `Explicit schema prefix "${ownSchemaName}" is not allowed. Use bare table names instead — isolation is enforced automatically.`;
     }
     // Everything else (t.id, a.name, alias.column) is allowed — it's a table alias
   }
@@ -132,14 +177,22 @@ const executeQuery = async (req, res, next) => {
     });
   }
 
+  // ── Sanitise query for security checks ───────────────────────────────────
+  // Remove comments and string literals ONCE; reuse for both checks below.
+  // This prevents data values like ('BEGIN a session') or comments from
+  // being misread as dangerous SQL keywords or schema references.
+  const sanitisedQuery = sanitiseForChecks(query);
+
   // ── Block dangerous DDL / admin operations ────────────────────────────────
-  const upperQuery = query.toUpperCase();
-  const forbiddenMatch = FORBIDDEN_KEYWORDS.find((kw) => upperQuery.includes(kw.toUpperCase()));
-  if (forbiddenMatch) {
+  // Uses whole-word (\b) regex so column/table names that CONTAIN a forbidden
+  // word as a substring (begin_date, grant_id, commit_hash, etc.) are NOT
+  // falsely blocked. Only standalone SQL keywords are matched.
+  const forbiddenEntry = FORBIDDEN_KEYWORD_REGEXES.find(({ regex }) => regex.test(sanitisedQuery));
+  if (forbiddenEntry) {
     return res.status(403).json({
       status: 403,
       data: null,
-      message: `Restricted operation: "${forbiddenMatch}" is not allowed.`,
+      message: `Restricted operation: "${forbiddenEntry.keyword}" is not allowed in the SQL editor.`,
     });
   }
 
@@ -150,11 +203,9 @@ const executeQuery = async (req, res, next) => {
   }
 
   // ── [SECURITY] Block cross-schema references ──────────────────────────────
-  // Strip comments before checking so users can't hide schema refs in comments.
-  const cleanQuery = query
-    .replace(/--[^\r\n]*/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '');
-  const schemaRefError = detectForbiddenSchemaRef(cleanQuery, schemaName);
+  // sanitisedQuery already has comments + string literals stripped, so users
+  // cannot hide schema references inside comments or data values.
+  const schemaRefError = detectForbiddenSchemaRef(sanitisedQuery, schemaName);
   if (schemaRefError) {
     return res.status(403).json({ status: 403, data: null, message: schemaRefError });
   }
