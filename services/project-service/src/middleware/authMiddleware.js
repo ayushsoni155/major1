@@ -3,7 +3,10 @@ const jwt = require('jsonwebtoken');
 const protect = async (req, res, next) => {
   try {
     // Read JWT from HttpOnly cookie (set by auth-service)
-    const token = req.cookies?.access_token;
+    let token = req.cookies?.access_token;
+    if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
     if (!token) {
       return res.status(401).json({ status: 401, data: null, message: 'Not authenticated. Please log in.' });
     }
