@@ -93,18 +93,18 @@ function CodeBlock({ children, language = "bash", copyText }) {
 
 // --- Data ---
 const FEATURES = [
-  { icon: Database, title: "Auto-Generated REST API", desc: "PostgREST instantly turns your tables into a full REST API at /api/rest/. Create a table, get CRUD endpoints — zero config.", colSpan: "md:col-span-2", color: "text-violet-400", glow: "rgba(139,92,246,0.2)" },
-  { icon: Shield, title: "Multi-Tenant Isolation", desc: "Every project gets its own PostgreSQL schema. Complete data isolation — no cross-project access ever.", colSpan: "md:col-span-1", color: "text-indigo-400", glow: "rgba(99,102,241,0.2)" },
-  { icon: Key, title: "JWT API Keys", desc: "Generate scoped JWT tokens with granular permissions (read, insert, update, delete) and origin whitelisting.", colSpan: "md:col-span-1", color: "text-cyan-400", glow: "rgba(34,211,238,0.2)" },
-  { icon: Code2, title: "SQL Editor", desc: "Execute raw SQL queries with syntax highlighting, query history, and execution time tracking.", colSpan: "md:col-span-1", color: "text-emerald-400", glow: "rgba(52,211,153,0.2)" },
-  { icon: Lock, title: "Authentication System", desc: "Built-in JWT auth with OTP email verification, refresh tokens, password reset, and session management.", colSpan: "md:col-span-1", color: "text-amber-400", glow: "rgba(251,191,36,0.2)" },
-  { icon: Users, title: "Team Collaboration", desc: "Invite members with Admin, Editor, or Viewer roles. Email invitations with accept/decline workflow.", colSpan: "md:col-span-1", color: "text-pink-400", glow: "rgba(244,114,182,0.2)" },
-  { icon: BarChart3, title: "Analytics Dashboard", desc: "Build custom charts and widgets from your data. Drag-and-drop dashboard layouts saved per project.", colSpan: "md:col-span-1", color: "text-orange-400", glow: "rgba(251,146,60,0.2)" },
-  { icon: Globe, title: "Real-time Notifications", desc: "Server-Sent Events via Redis Pub/Sub for instant in-app alerts on invitations and project updates.", colSpan: "md:col-span-1", color: "text-sky-400", glow: "rgba(56,189,248,0.2)" },
-  { icon: Layers, title: "Schema Visualization", desc: "Interactive ER diagrams showing all tables, columns, and relationships using React Flow.", colSpan: "md:col-span-1", color: "text-teal-400", glow: "rgba(45,212,191,0.2)" },
-  { icon: Server, title: "Audit Logging", desc: "Every action tracked — table changes, member updates, SQL queries — with IP address and timestamps.", colSpan: "md:col-span-2", color: "text-rose-400", glow: "rgba(251,113,133,0.2)" },
-  { icon: GitBranch, title: "CI/CD Pipeline", desc: "GitHub Actions pipeline with Trivy vulnerability scanning, Docker builds, and auto-push to Docker Hub.", colSpan: "md:col-span-1", color: "text-lime-400", glow: "rgba(163,230,53,0.2)" },
-  { icon: Cpu, title: "Redis Caching", desc: "OTP codes, API key validation, project lists, and rate limiting all cached in Redis for blazing speed.", colSpan: "md:col-span-1", color: "text-fuchsia-400", glow: "rgba(232,121,249,0.2)" },
+  { icon: Database, title: "Auto-Generated REST API", desc: "PostgREST instantly turns your tables into a full REST API at /api/rest/. Create a table, get CRUD endpoints — zero config.", color: "text-violet-400", glow: "rgba(139,92,246,0.2)" },
+  { icon: Shield, title: "Multi-Tenant Isolation", desc: "Every project gets its own PostgreSQL schema. Complete data isolation — no cross-project access ever.", color: "text-indigo-400", glow: "rgba(99,102,241,0.2)" },
+  { icon: Key, title: "JWT API Keys", desc: "Generate scoped JWT tokens with granular permissions (read, insert, update, delete) and origin whitelisting.", color: "text-cyan-400", glow: "rgba(34,211,238,0.2)" },
+  { icon: Code2, title: "SQL Editor", desc: "Execute raw SQL queries with syntax highlighting, query history, and execution time tracking.", color: "text-emerald-400", glow: "rgba(52,211,153,0.2)" },
+  { icon: Lock, title: "Authentication System", desc: "Built-in JWT auth with OTP email verification, refresh tokens, password reset, and session management.", color: "text-amber-400", glow: "rgba(251,191,36,0.2)" },
+  { icon: Users, title: "Team Collaboration", desc: "Invite members with Admin, Editor, or Viewer roles. Email invitations with accept/decline workflow.", color: "text-pink-400", glow: "rgba(244,114,182,0.2)" },
+  { icon: BarChart3, title: "Analytics Dashboard", desc: "Build custom charts and widgets from your data. Drag-and-drop dashboard layouts saved per project.", color: "text-orange-400", glow: "rgba(251,146,60,0.2)" },
+  { icon: Globe, title: "Real-time Notifications", desc: "Server-Sent Events via Redis Pub/Sub for instant in-app alerts on invitations and project updates.", color: "text-sky-400", glow: "rgba(56,189,248,0.2)" },
+  { icon: Layers, title: "Schema Visualization", desc: "Interactive ER diagrams showing all tables, columns, and relationships using React Flow.", color: "text-teal-400", glow: "rgba(45,212,191,0.2)" },
+  { icon: Server, title: "Audit Logging", desc: "Every action tracked — table changes, member updates, SQL queries — with IP address and timestamps.", color: "text-rose-400", glow: "rgba(251,113,133,0.2)" },
+  { icon: GitBranch, title: "CI/CD Pipeline", desc: "GitHub Actions pipeline with Trivy vulnerability scanning, Docker builds, and auto-push to Docker Hub.", color: "text-lime-400", glow: "rgba(163,230,53,0.2)" },
+  { icon: Cpu, title: "Redis Caching", desc: "OTP codes, API key validation, project lists, and rate limiting all cached in Redis for blazing speed.", color: "text-fuchsia-400", glow: "rgba(232,121,249,0.2)" },
 ];
 
 const HOW_IT_WORKS = [
@@ -544,52 +544,30 @@ export default function LandingPage() {
             <p className="text-white/50 max-w-xl mx-auto">Everything you need to launch your next big idea without wrestling with infrastructure.</p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {FEATURES.slice(0, 6).map((feature, idx) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+            {FEATURES.map((feature, idx) => (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0, transition: { delay: idx * 0.08 } }}
+                whileInView={{ opacity: 1, y: 0, transition: { delay: (idx % 3) * 0.08 } }}
                 viewport={{ once: true }}
                 whileHover={{ y: -6, transition: { duration: 0.2 } }}
-                className={`glass-card p-8 rounded-[2rem] flex flex-col justify-between overflow-hidden relative group ${feature.colSpan} border border-white/[0.07]`}
+                className="glass-card p-7 rounded-[2rem] flex flex-col justify-between overflow-hidden relative group border border-white/[0.07]"
               >
+                {/* Glow on hover */}
                 <div className="absolute top-0 right-0 w-40 h-40 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-all duration-500"
                   style={{ background: `radial-gradient(circle, ${feature.glow} 0%, transparent 70%)` }} />
+                {/* Top shimmer line */}
                 <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div>
-                  <div className="w-12 h-12 rounded-2xl bg-white/[0.06] flex items-center justify-center mb-6 shadow-inner border border-white/10 group-hover:border-white/20 transition-colors">
+                  <div className="w-12 h-12 rounded-2xl bg-white/[0.06] flex items-center justify-center mb-5 shadow-inner border border-white/10 group-hover:border-white/20 transition-colors">
                     <feature.icon className={`w-6 h-6 ${feature.color}`} />
                   </div>
-                  <h3 className="text-2xl font-bold mb-3">{feature.title}</h3>
-                  <p className="text-white/45 leading-relaxed font-medium">{feature.desc}</p>
+                  <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
+                  <p className="text-white/45 leading-relaxed text-sm font-medium">{feature.desc}</p>
                 </div>
-                <div className={`mt-6 text-xs font-semibold ${feature.color} flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300`}>
+                <div className={`mt-5 text-xs font-semibold ${feature.color} flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300`}>
                   Learn more <ArrowRight className="w-3 h-3" />
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Secondary Features Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
-            {FEATURES.slice(6).map((feature, idx) => (
-              <motion.div
-                key={idx + 6}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0, transition: { delay: idx * 0.08 } }}
-                viewport={{ once: true }}
-                whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                className={`glass-card p-6 rounded-2xl flex items-start gap-4 overflow-hidden relative group ${feature.colSpan} border border-white/[0.07]`}
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-60 transition-all duration-500"
-                  style={{ background: `radial-gradient(circle, ${feature.glow} 0%, transparent 70%)` }} />
-                <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center flex-shrink-0 border border-white/10 group-hover:border-white/20 transition-colors">
-                  <feature.icon className={`w-5 h-5 ${feature.color}`} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold mb-1">{feature.title}</h3>
-                  <p className="text-white/45 leading-relaxed text-sm">{feature.desc}</p>
                 </div>
               </motion.div>
             ))}
