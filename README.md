@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # ⚡ RapidBase
 
@@ -706,4 +706,3 @@ This project is licensed under the **MIT License** — see [LICENSE](./LICENSE).
 ```
 MIT License — Copyright (c) 2026 Ayush Soni
 ```
-]]>
