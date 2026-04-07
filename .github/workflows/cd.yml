@@ -1,0 +1,133 @@
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    # Only run this job if the CI pipeline was successful
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy deployment files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 54.75.41.106
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml,docker/"
+          target: "/home/ubuntu/rapidbase/"
+
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 54.75.41.106
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Navigate to the deployment directory
+            cd /home/ubuntu/rapidbase/
+            
+            # Export environment variable to ensure PostgREST configs are picked up correctly
+            set -a
+            source .env
+            set +a
+            
+            # Login to Docker Hub using secrets for pulling private images if needed
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            
+            echo "Pulling latest images..."
+            docker compose pull
+            
+            echo "Restarting services..."
+            docker compose down
+            docker compose up -d
+            
+            # Clean up dangling images to save space
+            docker image prune -f
+
+  notify_success:
+    name: Notify Deployment Success
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Send success email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
+          from: "RapidBase CD <${{ secrets.MAIL_USERNAME }}>"
+          subject: "🚀 Deployment Passed — ${{ github.repository }}"
+          html_body: |
+            <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
+              <div style="background:linear-gradient(135deg,#238636,#196127);padding:28px 32px">
+                <h1 style="margin:0;font-size:22px;font-weight:700">🚀 Deployment Successful</h1>
+                <p style="margin:6px 0 0;opacity:.85;font-size:14px">The new version is live on the EC2 Production Server</p>
+              </div>
+              <div style="padding:28px 32px">
+                <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+                  <tr><td style="padding:8px 0;color:#8b949e;width:140px">📦 Repository</td><td style="padding:8px 0;font-weight:600">${{ github.repository }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌿 Branch</td><td style="padding:8px 0;font-weight:600">${{ github.ref_name }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌐 Server IP</td><td style="padding:8px 0;font-weight:600">54.75.41.106</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🏃 Run</td><td style="padding:8px 0">#${{ github.run_number }}</td></tr>
+                </table>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display:inline-block;background:linear-gradient(135deg,#238636,#196127);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">📋 View Run Details</a>
+              </div>
+              <div style="padding:16px 32px;background:#161b22;border-top:1px solid #30363d;font-size:12px;color:#484f58;text-align:center">
+                RapidBase CD • Run #${{ github.run_number }} • ${{ github.workflow }}
+              </div>
+            </div>
+  
+  notify_failure:
+    name: Notify Deployment Failure
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+      - name: Send failure email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          to: ${{ secrets.ALERT_EMAIL_ADDRESS }}
+          from: "RapidBase CD <${{ secrets.MAIL_USERNAME }}>"
+          subject: "❌ Deployment Failed — ${{ github.repository }}"
+          html_body: |
+            <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
+              <div style="background:linear-gradient(135deg,#da3633,#b91c1c);padding:28px 32px">
+                <h1 style="margin:0;font-size:22px;font-weight:700">❌ Deployment Failed</h1>
+                <p style="margin:6px 0 0;opacity:.85;font-size:14px">The CD pipeline failed to deploy to the EC2 instance</p>
+              </div>
+              <div style="padding:28px 32px">
+                <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
+                  <tr><td style="padding:8px 0;color:#8b949e;width:140px">📦 Repository</td><td style="padding:8px 0;font-weight:600">${{ github.repository }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌿 Branch</td><td style="padding:8px 0;font-weight:600">${{ github.ref_name }}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌐 Server IP</td><td style="padding:8px 0;font-weight:600">54.75.41.106</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🏃 Run</td><td style="padding:8px 0">#${{ github.run_number }}</td></tr>
+                </table>
+                <div style="background:#161b22;border:1px solid #30363d;border-left:4px solid #da3633;border-radius:8px;padding:16px;margin-bottom:24px">
+                  <p style="margin:0;font-size:13px;color:#f85149;font-weight:600">⚠️ Action Required</p>
+                  <p style="margin:8px 0 0;font-size:13px;color:#8b949e">Please check the GitHub Actions logs for details. It might be an SSH connection timeout, an issue with Docker Hub credentials, or a problem spinning up the containers.</p>
+                </div>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display:inline-block;background:linear-gradient(135deg,#da3633,#b91c1c);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">🔍 View Full Logs</a>
+              </div>
+              <div style="padding:16px 32px;background:#161b22;border-top:1px solid #30363d;font-size:12px;color:#484f58;text-align:center">
+                RapidBase CD • Run #${{ github.run_number }} • ${{ github.workflow }}
+              </div>
+            </div>
