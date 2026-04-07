@@ -35,7 +35,7 @@ const getProjectSchema = async (projectId) => {
   const cached = await redis.get(`project_schema:${projectId}`);
   if (cached) return cached;
   const { rows } = await db.query(
-    'SELECT schema_name FROM projects WHERE project_id = $1',
+    'SELECT schema_name FROM public.projects WHERE project_id = $1',
     [projectId]
   );
   if (rows.length === 0) return null;
@@ -49,8 +49,8 @@ const getProjectSchema = async (projectId) => {
  */
 const getProjectMember = async (projectId, userId) => {
   const { rows } = await db.query(
-    `SELECT pm.role FROM project_members pm
-     JOIN projects p ON p.project_id = pm.project_id
+    `SELECT pm.role FROM public.project_members pm
+     JOIN public.projects p ON p.project_id = pm.project_id
      WHERE pm.project_id = $1
        AND pm.user_id  = $2
        AND p.project_status != 'archived'`,
@@ -223,12 +223,12 @@ const executeQuery = async (req, res, next) => {
     // schema. query_history and audit_log live in the public schema and must be
     // reached via the default pool connection.
     db.query(
-      'INSERT INTO query_history (project_id, user_id, query_text, query_status, execution_time_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
+      'INSERT INTO public.query_history (project_id, user_id, query_text, query_status, execution_time_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
       [projectId, userId, query.trim(), 'success', durationMs, results.reduce((s, r) => s + (r.rowCount || 0), 0)]
     ).catch((e) => console.error('[DB] query_history insert failed:', e.message));
 
     db.query(
-      'INSERT INTO audit_log (project_id, actor_id, action_type, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
+      'INSERT INTO public.audit_log (project_id, actor_id, action_type, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
       [projectId, userId, 'QUERY_EXECUTED', JSON.stringify({ statements: statements.length, durationMs, memberRole: member.role }), req.ip]
     ).catch((e) => console.error('[DB] audit_log insert failed:', e.message));
 
@@ -243,7 +243,7 @@ const executeQuery = async (req, res, next) => {
     // transaction state and will break all subsequent queries on that client.
     await client.query('ROLLBACK').catch(() => {});
     db.query(
-      'INSERT INTO query_history (project_id, user_id, query_text, query_status, error_message) VALUES ($1, $2, $3, $4, $5)',
+      'INSERT INTO public.query_history (project_id, user_id, query_text, query_status, error_message) VALUES ($1, $2, $3, $4, $5)',
       [projectId, userId, query.trim(), 'failed', error.message]
     ).catch(() => {});
     res.status(400).json({ status: 400, data: { error: error.message }, message: 'Query execution failed' });
@@ -270,12 +270,12 @@ const getQueryHistory = async (req, res, next) => {
   try {
     const offset      = (parseInt(page) - 1) * parseInt(limit);
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM query_history WHERE project_id = $1 AND user_id = $2',
+      'SELECT COUNT(*) as total FROM public.query_history WHERE project_id = $1 AND user_id = $2',
       [projectId, userId]
     );
     const { rows } = await db.query(
       `SELECT id, query_text, query_status, execution_time_ms, rows_affected, error_message, created_at
-       FROM query_history
+       FROM public.query_history
        WHERE project_id = $1 AND user_id = $2
        ORDER BY created_at DESC
        LIMIT $3 OFFSET $4`,
@@ -312,8 +312,8 @@ const getAuditLogs = async (req, res, next) => {
     const { rows } = await db.query(
       `SELECT al.id, al.actor_id, al.action_type, al.details, al.ip_address, al.created_at,
               u.email as actor_email, u.name as actor_name
-       FROM audit_log al
-       LEFT JOIN users u ON u.id = al.actor_id
+       FROM public.audit_log al
+       LEFT JOIN public.users u ON u.id = al.actor_id
        WHERE al.project_id = $1
        ORDER BY al.created_at DESC
        LIMIT $2 OFFSET $3`,
