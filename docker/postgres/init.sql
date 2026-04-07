@@ -201,7 +201,7 @@ BEGIN
     -- Build comma-separated list of project schemas ONLY (public is excluded)
     SELECT string_agg(schema_name, ',')
     INTO schemas
-    FROM projects;
+    FROM public.projects;
 
     IF schemas IS NOT NULL AND schemas != '' THEN
         PERFORM set_config('pgrst.db_schemas', schemas, true);
@@ -226,7 +226,7 @@ RETURNS void AS $$
 DECLARE
     s text;
 BEGIN
-    FOR s IN SELECT schema_name FROM projects
+    FOR s IN SELECT schema_name FROM public.projects
     LOOP
         EXECUTE format('GRANT USAGE ON SCHEMA %I TO web_anon', s);
         EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO web_anon', s);
@@ -254,8 +254,10 @@ BEGIN
     FOR obj IN SELECT * FROM pg_event_trigger_ddl_commands()
                 WHERE command_tag = 'CREATE TABLE'
     LOOP
-        -- Only grant on project schemas (they exist in the projects table)
-        IF EXISTS (SELECT 1 FROM projects WHERE schema_name = obj.schema_name) THEN
+        -- Only grant on project schemas (they exist in the public.projects table)
+        -- NOTE: Must use public. prefix — this trigger fires inside user transactions
+        -- where search_path is set to the project schema, so bare 'projects' won't resolve.
+        IF EXISTS (SELECT 1 FROM public.projects WHERE schema_name = obj.schema_name) THEN
             EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %s TO web_anon', obj.object_identity);
         END IF;
     END LOOP;
