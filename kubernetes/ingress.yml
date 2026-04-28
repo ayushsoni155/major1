@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rapidbase-ingress
+  namespace: rapidbase
+  annotations:
+    # Required for SSE (Server-Sent Events) — disable buffering
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+    # Increase client body size for large payloads
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # Use HTTP/1.1 upstream keep-alives
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: localhost
+      http:
+        paths:
+          # Route ALL traffic to nginx-gateway which handles all complex routing
+          # internally (auth_request, PostgREST proxy, SSE, CORS, etc.)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-gateway
+                port:
+                  number: 80
