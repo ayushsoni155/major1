@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: project-service
+  name: postgres
   namespace: rapidbase
   labels:
-    app: project-service
+    app: postgres
 spec:
   selector:
-    app: project-service
+    app: postgres
   ports:
-    - name: http
-      port: 4002
-      targetPort: 4002
+    - name: postgres
+      port: 5432
+      targetPort: 5432
       protocol: TCP
   type: ClusterIP
