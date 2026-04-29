@@ -15,8 +15,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: 52.30.113.244
-      http:
+    - http:
         paths:
           # Route ALL traffic to nginx-gateway which handles all complex routing
           # internally (auth_request, PostgREST proxy, SSE, CORS, etc.)

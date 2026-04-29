@@ -16,22 +16,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy Kubernetes manifests and env to EC2
+      - name: Copy Kubernetes manifests to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: 52.30.113.244
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "kubernetes/,docker/"
-          target: "/home/ubuntu/rapidbase/"
-
-      - name: Copy .env file to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 52.30.113.244
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: ".env"
           target: "/home/ubuntu/rapidbase/"
 
       - name: Bootstrap Kind cluster (first-time) and apply manifests via SSH
