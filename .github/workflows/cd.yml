@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to EC2
+    name: Deploy to EC2 (Kubernetes)
     # Only run this job if the CI pipeline was successful
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
@@ -16,42 +16,90 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy deployment files to EC2
+      - name: Copy Kubernetes manifests and env to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: 54.75.41.106
+          host: 52.30.113.244
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml,docker/"
+          source: "kubernetes/,docker/"
           target: "/home/ubuntu/rapidbase/"
 
-      - name: Execute deployment commands via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Copy .env file to EC2
+        uses: appleboy/scp-action@v0.1.7
         with:
-          host: 54.75.41.106
+          host: 52.30.113.244
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          source: ".env"
+          target: "/home/ubuntu/rapidbase/"
+
+      - name: Bootstrap Kind cluster (first-time) and apply manifests via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 52.30.113.244
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 15m
           script: |
-            # Navigate to the deployment directory
+            set -euo pipefail
             cd /home/ubuntu/rapidbase/
-            
-            # Export environment variable to ensure PostgREST configs are picked up correctly
-            set -a
-            source .env
-            set +a
-            
-            # Login to Docker Hub using secrets for pulling private images if needed
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-            
-            echo "Pulling latest images..."
-            docker compose pull
-            
-            echo "Restarting services..."
-            docker compose down
-            docker compose up -d
-            
-            # Clean up dangling images to save space
-            docker image prune -f
+
+            # ── Docker Hub login (for pulling private images) ─────────────
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login \
+              -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            # ── Create kind cluster if it doesn't exist ───────────────────
+            if ! kind get clusters 2>/dev/null | grep -q "^rapidbase$"; then
+              echo "[INFO] Creating kind cluster 'rapidbase'..."
+              kind create cluster \
+                --name rapidbase \
+                --config kubernetes/kind/config.yml
+            else
+              echo "[INFO] Kind cluster 'rapidbase' already exists — skipping creation."
+            fi
+
+            kubectl cluster-info --context kind-rapidbase
+
+            # ── Install ingress-nginx if not present ──────────────────────
+            if ! kubectl get ns ingress-nginx &>/dev/null; then
+              echo "[INFO] Installing ingress-nginx controller..."
+              kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+              kubectl wait --namespace ingress-nginx \
+                --for=condition=ready pod \
+                --selector=app.kubernetes.io/component=controller \
+                --timeout=180s
+            else
+              echo "[INFO] ingress-nginx already installed — skipping."
+            fi
+
+            # ── Rolling-update: pull latest images into kind nodes ────────
+            echo "[INFO] Pulling latest Docker images into kind nodes..."
+            SERVICES="ayushsoni155/rapidbase-auth-service ayushsoni155/rapidbase-project-service ayushsoni155/rapidbase-database-service ayushsoni155/rapidbase-analytics-service ayushsoni155/rapidbase-frontend ayushsoni155/rapidbase-nginx-gateway"
+            for img in $SERVICES; do
+              docker pull "${img}:latest" || true
+              kind load docker-image "${img}:latest" --name rapidbase || true
+            done
+
+            # ── Apply all Kubernetes manifests ────────────────────────────
+            chmod +x kubernetes/deploy.sh
+            kubernetes/deploy.sh apply
+
+            # ── Trigger rolling restarts so pods pick up new images ───────
+            echo "[INFO] Triggering rolling restarts..."
+            NAMESPACE="rapidbase"
+            for deploy in auth-service project-service database-service analytics-service frontend nginx-gateway; do
+              kubectl rollout restart deployment/${deploy} -n ${NAMESPACE} 2>/dev/null || true
+            done
+
+            # ── Wait for all deployments to roll out ──────────────────────
+            echo "[INFO] Waiting for rollouts to complete..."
+            for deploy in auth-service project-service database-service analytics-service frontend nginx-gateway; do
+              kubectl rollout status deployment/${deploy} -n ${NAMESPACE} --timeout=120s 2>/dev/null || true
+            done
+
+            echo "[INFO] ✅ Kubernetes deployment complete."
+            kubectl get pods -n rapidbase -o wide
 
   notify_success:
     name: Notify Deployment Success
@@ -74,13 +122,14 @@ jobs:
             <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
               <div style="background:linear-gradient(135deg,#238636,#196127);padding:28px 32px">
                 <h1 style="margin:0;font-size:22px;font-weight:700">🚀 Deployment Successful</h1>
-                <p style="margin:6px 0 0;opacity:.85;font-size:14px">The new version is live on the EC2 Production Server</p>
+                <p style="margin:6px 0 0;opacity:.85;font-size:14px">The new version is live on Kubernetes (Kind) — EC2 Production Server</p>
               </div>
               <div style="padding:28px 32px">
                 <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
                   <tr><td style="padding:8px 0;color:#8b949e;width:140px">📦 Repository</td><td style="padding:8px 0;font-weight:600">${{ github.repository }}</td></tr>
                   <tr><td style="padding:8px 0;color:#8b949e">🌿 Branch</td><td style="padding:8px 0;font-weight:600">${{ github.ref_name }}</td></tr>
-                  <tr><td style="padding:8px 0;color:#8b949e">🌐 Server IP</td><td style="padding:8px 0;font-weight:600">54.75.41.106</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌐 Server IP</td><td style="padding:8px 0;font-weight:600">52.30.113.244</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">☸️ Orchestrator</td><td style="padding:8px 0;font-weight:600">Kubernetes (Kind)</td></tr>
                   <tr><td style="padding:8px 0;color:#8b949e">🏃 Run</td><td style="padding:8px 0">#${{ github.run_number }}</td></tr>
                 </table>
                 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display:inline-block;background:linear-gradient(135deg,#238636,#196127);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">📋 View Run Details</a>
@@ -111,18 +160,19 @@ jobs:
             <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden;border:1px solid #30363d">
               <div style="background:linear-gradient(135deg,#da3633,#b91c1c);padding:28px 32px">
                 <h1 style="margin:0;font-size:22px;font-weight:700">❌ Deployment Failed</h1>
-                <p style="margin:6px 0 0;opacity:.85;font-size:14px">The CD pipeline failed to deploy to the EC2 instance</p>
+                <p style="margin:6px 0 0;opacity:.85;font-size:14px">The CD pipeline failed to deploy to the Kubernetes cluster on EC2</p>
               </div>
               <div style="padding:28px 32px">
                 <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px">
                   <tr><td style="padding:8px 0;color:#8b949e;width:140px">📦 Repository</td><td style="padding:8px 0;font-weight:600">${{ github.repository }}</td></tr>
                   <tr><td style="padding:8px 0;color:#8b949e">🌿 Branch</td><td style="padding:8px 0;font-weight:600">${{ github.ref_name }}</td></tr>
-                  <tr><td style="padding:8px 0;color:#8b949e">🌐 Server IP</td><td style="padding:8px 0;font-weight:600">54.75.41.106</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">🌐 Server IP</td><td style="padding:8px 0;font-weight:600">52.30.113.244</td></tr>
+                  <tr><td style="padding:8px 0;color:#8b949e">☸️ Orchestrator</td><td style="padding:8px 0;font-weight:600">Kubernetes (Kind)</td></tr>
                   <tr><td style="padding:8px 0;color:#8b949e">🏃 Run</td><td style="padding:8px 0">#${{ github.run_number }}</td></tr>
                 </table>
                 <div style="background:#161b22;border:1px solid #30363d;border-left:4px solid #da3633;border-radius:8px;padding:16px;margin-bottom:24px">
                   <p style="margin:0;font-size:13px;color:#f85149;font-weight:600">⚠️ Action Required</p>
-                  <p style="margin:8px 0 0;font-size:13px;color:#8b949e">Please check the GitHub Actions logs for details. It might be an SSH connection timeout, an issue with Docker Hub credentials, or a problem spinning up the containers.</p>
+                  <p style="margin:8px 0 0;font-size:13px;color:#8b949e">Please check the GitHub Actions logs for details. It might be an SSH connection timeout, a kind cluster issue, or a pod crash-loop. Run <code>kubectl get pods -n rapidbase</code> on the server to investigate.</p>
                 </div>
                 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="display:inline-block;background:linear-gradient(135deg,#da3633,#b91c1c);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">🔍 View Full Logs</a>
               </div>
